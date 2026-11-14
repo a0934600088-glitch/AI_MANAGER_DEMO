@@ -13,4 +13,4 @@ Open `index.html` in a modern browser. No build step or external dependencies ar
 - No real order, payment, inventory, or supplier action is performed.
 
 ## GitHub Pages
-The repository includes a GitHub Actions workflow to publish this static site. GitHub Pages must be enabled for this repository with **Build and deployment → Source: GitHub Actions**. After the first successful deployment, the public site URL will be shown in the workflow deployment summary.
+The repository includes a GitHub Actions workflow to publish this static site. GitHub Pages must be enabled for this repository with **Build and deployment → Source: GitHub Actions**. After the first successful deployment, the public site URL will be shown in the workflow deployment summary. The workflow is triggered by pushes to `main`.
