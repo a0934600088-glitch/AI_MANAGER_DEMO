@@ -30,10 +30,16 @@ main{max-width:1250px;margin:34px auto;padding:0 22px}.intro{display:flex;justif
 </section>
 <section class="panel">
 <div class="resulthead"><h2>2. Каталог и подбор деталей</h2><span class="pill">Автомобиль выбран</span></div>
-<div class="tabs"><button class="tab active" data-tab="catalog">Каталог</button><button class="tab" data-tab="diagram">Схема узла</button><button class="tab" data-tab="cart">Корзина <span id="cartCount">0</span></button></div>
+<div class="tabs"><button class="tab active" data-tab="catalog">Каталог</button><button class="tab" data-tab="oemSearch">Поиск OEM</button><button class="tab" data-tab="diagram">Схема узла</button><button class="tab" data-tab="cart">Корзина <span id="cartCount">0</span></button></div>
 <div id="catalog">
 <div class="field"><label>Группа деталей</label><select id="group"><option value="brakes">Тормозная система</option><option value="suspension">Передняя подвеска</option><option value="engine">Двигатель</option></select></div>
 <div class="parts" id="parts"></div>
+</div>
+<div id="oemSearch" class="hidden">
+<div class="field"><label>Оригинальный номер (OEM)</label><input id="oemInput" placeholder="Например: DEMO-OEM-31126775959"></div>
+<div class="actions"><button id="oemBtn">Найти номер</button><button class="secondary" id="oemExample">Подставить пример</button></div>
+<p class="hint">Поиск выполняется только по локальному набору демонстрационных данных. Это не запрос к производителю.</p>
+<div id="oemResult" class="part" style="margin-top:14px"><strong>Введите номер</strong><small>Результат покажет условную деталь, узел и позицию на схеме.</small></div>
 </div>
 <div id="diagramView" class="hidden">
 <p style="margin-bottom:10px">Демонстрационная схема передней подвески. Нажмите на номер позиции.</p>
@@ -54,10 +60,25 @@ let cart=[];
 function renderParts(){document.getElementById("parts").innerHTML=groups[document.getElementById("group").value].map((p,i)=>'<div class="part"><div class="type">'+p.kind+'</div><strong>'+p.name+'</strong><small>'+p.desc+'</small><div class="price">€'+p.price.toFixed(2)+'</div><small>'+p.sku+'</small><button onclick="addToCart(\''+p.sku+'\')">Добавить в демо-корзину</button></div>').join('')}
 function addToCart(sku){let p=Object.values(groups).flat().find(x=>x.sku===sku);cart.push(p);document.getElementById("cartCount").textContent=cart.length;document.getElementById("cartItems").innerHTML=cart.map((x,i)=>'<div class="cartline"><span>'+x.name+'<br><small>'+x.sku+'</small></span><b>€'+x.price.toFixed(2)+'</b></div>').join('')+'<p><b>Итого: €'+cart.reduce((s,x)=>s+x.price,0).toFixed(2)+'</b></p>'}
 document.getElementById("group").addEventListener("change",renderParts);renderParts();
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));["catalog","diagramView","cart"].forEach((id,i)=>document.getElementById(id).classList.toggle("hidden",["catalog","diagram","cart"][i]!==b.dataset.tab))}));
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));["catalog","oemSearch","diagramView","cart"].forEach((id,i)=>document.getElementById(id).classList.toggle("hidden",["catalog","oemSearch","diagram","cart"][i]!==b.dataset.tab))}));
 document.getElementById("vinBtn").onclick=()=>{document.getElementById("vinMsg").textContent="Демо: показан заранее подготовленный пример BMW X5. Реальный VIN-provider пока не подключён.";};
 document.getElementById("clearBtn").onclick=()=>{document.getElementById("vin").value="";document.getElementById("vinMsg").textContent="Введите VIN или выберите автомобиль вручную.";};
 document.getElementById("manualBtn").onclick=()=>{const v=document.getElementById("vehicleSelect");document.querySelector("#vehicle strong").textContent=v.options[v.selectedIndex].text;document.querySelector("#vehicle small").textContent="Демонстрационная конфигурация · не проверена по внешнему каталогу";};
-document.querySelectorAll(".pin").forEach(p=>p.onclick=()=>{const n=p.dataset.pos;const map={"1":["Передний нижний рычаг","DEMO-OEM-31126775959"],"2":["Стойка стабилизатора","DEMO-OEM-31356765933"],"3":["Опора амортизатора","DEMO-OEM-313068521ೆ"]};const d=map[n];document.getElementById("positionInfo").innerHTML="<strong>Позиция "+n+": "+d[0]+"</strong><small>Условный OEM reference: "+d[1]+"</small>";});
+document.querySelectorAll(".pin").forEach(p=>p.onclick=()=>{const n=p.dataset.pos;const map={"1":["Передний нижний рычаг","DEMO-OEM-31126775959"],"2":["Стойка стабилизатора","DEMO-OEM-31356765933"],"3":["Опора амортизатора","DEMO-OEM-31306852133"]};const d=map[n];document.getElementById("positionInfo").innerHTML="<strong>Позиция "+n+": "+d[0]+"</strong><small>Условный OEM reference: "+d[1]+"</small>";});
+const demoOem={
+ "DEMO-OEM-31126775959":{name:"Передний нижний рычаг",group:"Передняя подвеска",position:"1",diagram:"Передняя подвеска",note:"Условный демонстрационный номер"},
+ "DEMO-OEM-31356765933":{name:"Стойка стабилизатора",group:"Передняя подвеска",position:"2",diagram:"Передняя подвеска",note:"Условный демонстрационный номер"},
+ "DEMO-OEM-31306852133":{name:"Опора амортизатора",group:"Передняя подвеска",position:"3",diagram:"Передняя подвеска",note:"Условный демонстрационный номер"}
+};
+function searchOem(){
+ const q=document.getElementById("oemInput").value.trim().toUpperCase();
+ const p=demoOem[q]; const out=document.getElementById("oemResult");
+ if(!p){out.innerHTML="<strong>Номер не найден в демо-наборе</strong><small>Попробуйте один из трёх демонстрационных номеров. Отсутствие результата ничего не говорит о реальном каталоге производителя.</small>";return;}
+ out.innerHTML="<div class='type'>DEMO DATA · НЕ ПРОВЕРЕНО ПРОИЗВОДИТЕЛЕМ</div><strong>"+p.name+"</strong><small>OEM: "+q+"<br>Узел: "+p.group+"<br>Схема: "+p.diagram+"<br>Позиция на схеме: "+p.position+"<br>"+p.note+"</small><div class='actions'><button id='showOemPosition'>Показать позицию на схеме</button></div>";
+ document.getElementById("showOemPosition").onclick=()=>{document.querySelector('[data-tab="diagram"]').click();document.querySelector('.pin[data-pos="'+p.position+'"]').dispatchEvent(new Event("click"));};
+}
+document.getElementById("oemBtn").onclick=searchOem;
+document.getElementById("oemInput").addEventListener("keydown",e=>{if(e.key==="Enter")searchOem();});
+document.getElementById("oemExample").onclick=()=>{document.getElementById("oemInput").value="DEMO-OEM-31126775959";searchOem();};
 </script>
 </body></html>
