@@ -1,10 +1,14 @@
-# AI_MANAGER_DEMO v1.7
+# AI_MANAGER_DEMO v1.8
 
 Static browser prototype for the AI Manager automotive-parts sales workflow.
 
 ## Published demo
 
 https://a0934600088-glitch.github.io/AI_MANAGER_DEMO/
+
+## Included in v1.8
+
+- Customer messenger includes an active **Связаться с менеджером** action. Clicking it records a local handoff event, updates the chat status, and explains the intended Operator Console workflow. This is a frontend simulation only: no live operator queue, notification, or human connection is configured.
 
 ## Included in v1.7
 
@@ -24,7 +28,7 @@ The module is a first-class capability in the planned **Catalog & Fitment** doma
 
 ## Strict demo boundaries
 
-This repository contains a static frontend only. The v1.7 workflow is a client-side simulation, not a live backend integration.
+This repository contains a static frontend only. The v1.8 workflow is a client-side simulation, not a live backend integration.
 
 - The Volkswagen VIN card is a fixed demonstration fixture. No VIN decoder or Parts-Catalogs request is made.
 - Catalog search, OEM mapping, analogues, fitment status, and offer price are synthetic demonstration records.
