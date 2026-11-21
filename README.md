@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO v1.6
+# AI_MANAGER_DEMO v1.7
 
 Static browser prototype for the AI Manager automotive-parts sales workflow.
 
@@ -6,14 +6,14 @@ Static browser prototype for the AI Manager automotive-parts sales workflow.
 
 https://a0934600088-glitch.github.io/AI_MANAGER_DEMO/
 
-## Included in v1.6
+## Included in v1.7
 
 - Three-column workspace: VIN and vehicle context; backend activity journal; customer messenger.
 - No manual vehicle selector.
 - Volkswagen vehicle card shown inside the chat with **Да, подтверждаю** and **Нет, проверить VIN** actions.
 - Guided demo flow: VIN → customer confirmation → brake-pad request → catalog lookup → OEM mapping → analogues → customer offer.
 - **Architecture requirement added: Original Parts Diagram Selection.** After vehicle confirmation, AI Manager requests the exact original-catalog diagram for the requested node, sends it into the chat, lets the customer select a numbered callout, resolves that callout through structured catalog data to an OE/OEM number, and then continues to validated analogues and pricing.
-- Left-side text context, file attachments, and optional microphone recording.
+- Customer messenger: voice dictation to text (where browser speech recognition is supported), file attachments, and photo attachments with in-chat previews. The left-side context panel also retains its local attachment and microphone-recording controls.
 - Responsive layout for desktop, tablet, and mobile.
 
 ## Architecture specification
@@ -24,13 +24,13 @@ The module is a first-class capability in the planned **Catalog & Fitment** doma
 
 ## Strict demo boundaries
 
-This repository contains a static frontend only. The v1.6 workflow is a client-side simulation, not a live backend integration.
+This repository contains a static frontend only. The v1.7 workflow is a client-side simulation, not a live backend integration.
 
 - The Volkswagen VIN card is a fixed demonstration fixture. No VIN decoder or Parts-Catalogs request is made.
 - Catalog search, OEM mapping, analogues, fitment status, and offer price are synthetic demonstration records.
 - Original Parts Diagram Selection is specified in the architecture document; this static demo does not connect to ETKA or another live OEM catalog and does not validate real callout-to-OE mappings.
 - The journal labels mock sources explicitly. “Demo flow passed” does not mean real compatibility was established.
-- Selected files and recorded audio remain in the browser; no upload endpoint exists.
+- Messenger attachments and photos are displayed locally in the chat; left-panel files and recorded audio remain in the browser. No upload endpoint exists. Voice dictation uses the browser Speech Recognition API where available; recognized text is inserted into the message field for review and manual sending.
 - No live inventory, supplier pricing, order creation, checkout, or payment is available.
 - No API keys or credentials are embedded in the frontend.
 - Do not use the displayed part numbers, prices, or fitment statements to purchase parts.
