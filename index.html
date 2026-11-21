@@ -44,6 +44,11 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 .diagram-actions{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
 .diagram-actions button{font-size:10px;padding:8px}
 .selection-note{font-size:10px;color:#a9c1d6;margin-top:8px}
+
+.tree-wrap{border:1px solid #36516c;background:#0a1522;border-radius:10px;padding:11px;margin-bottom:12px}
+.tree-title{font-size:10px;font-weight:850;letter-spacing:.7px;color:#8fc3ff;margin-bottom:8px}
+.selection-tree{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#c8d9eb;font:10px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+.tree-foot{font-size:9px;color:#91a5b8;border-top:1px solid #24384e;padding-top:7px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -75,7 +80,11 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </section>
 <section class="panel">
 <div class="panel-head"><h2>02 · ЖУРНАЛ BACKEND</h2><span class="sub" id="backendState">IDLE</span></div>
-<div class="panel-body"><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v1.9</div></div></div></div></div>
+<div class="panel-body"><div class="tree-wrap"><div class="tree-title">СТРУКТУРА ПОДБОРА · LIVE STATE</div><pre id="selectionTree" class="selection-tree">selection {
+  vehicle: WAITING_FOR_VIN,
+  request: WAITING_FOR_CUSTOMER,
+  catalog: NOT_QUERIED
+}</pre><div class="tree-foot">Обновляется при каждом шаге сценария. Значения помечены как DEMO, пока нет реального каталога.</div></div><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v1.9</div></div></div></div></div>
 </section>
 <section class="panel chat-panel">
 <div class="panel-head"><h2>03 · КЛИЕНТСКИЙ МЕССЕНДЖЕР</h2><span class="sub">CHAT UI</span></div>
@@ -102,18 +111,43 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 <script>
 const $=id=>document.getElementById(id);
 let confirmed=false, flowRunning=false, recorder=null, chunks=[];
+let selectionState={vin:null,vehicle:null,confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};
+function renderSelectionTree(){
+ const lines=[
+ 'selection {',
+ '  vehicle: '+(selectionState.vehicle||'WAITING_FOR_VIN')+',',
+ '  vin: '+(selectionState.vin||'null')+',',
+ '  customer_confirmed: '+selectionState.confirmed+',',
+ '  request: '+(selectionState.request?JSON.stringify(selectionState.request):'WAITING_FOR_CUSTOMER')+',',
+ '  catalog_hierarchy: {',
+ '    make: '+(selectionState.vehicle?'VOLKSWAGEN':'null')+',',
+ '    model: '+(selectionState.vehicle?'GOLF / VARIANT / 4MOTION':'null')+',',
+ '    year: '+(selectionState.vehicle?'2018':'null')+',',
+ '    system: '+(selectionState.nodes.length?JSON.stringify(selectionState.nodes):'NOT_IDENTIFIED')+',',
+ '    diagrams: '+(selectionState.diagrams.length?JSON.stringify(selectionState.diagrams):'NOT_OPENED')+',',
+ '    callouts_selected: '+(selectionState.selected.length?JSON.stringify(selectionState.selected):'[]')+',',
+ '    catalog_items: '+(selectionState.resolved.length?JSON.stringify(selectionState.resolved):'NOT_RESOLVED')+',',
+ '    oe_numbers: '+(selectionState.resolved.length?'DEMO_ONLY':'NOT_RESOLVED')+',',
+ '    analogues: '+(selectionState.resolved.length?'DEMO_ONLY':'NOT_RESOLVED')',
+ '  },',
+ '  data_source: "LOCAL_DEMO_FIXTURES"',
+ '}'
+ ];
+ const el=$('selectionTree');if(el)el.textContent=lines.join('\\n');
+}
+renderSelectionTree();
 function now(){return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
 function log(title,detail,source='Demo backend · local mock data',kind=''){const el=document.createElement('div');el.className='event '+kind;const icon=kind==='success'?'✓':kind==='demo-event'?'!':'↳';el.innerHTML='<div class="event-icon">'+icon+'</div><div><strong></strong><p></p><div class="source"></div></div>';el.querySelector('strong').textContent=title;el.querySelector('p').textContent=detail;el.querySelector('.source').textContent='Источник: '+source;$('timeline').prepend(el)}
 function message(html,who='bot'){const el=document.createElement('div');el.className='msg'+(who==='user'?' user':'');el.innerHTML=html+'<span class="time">'+now()+'</span>';$('messages').append(el);$('messages').scrollTop=$('messages').scrollHeight;return el}
 function plainMessage(text,who='bot'){const el=document.createElement('div');el.className='msg'+(who==='user'?' user':'');const p=document.createElement('p');p.textContent=text;el.append(p);const t=document.createElement('span');t.className='time';t.textContent=now();el.append(t);$('messages').append(el);$('messages').scrollTop=$('messages').scrollHeight;return el}
 function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function setBusy(v){flowRunning=v;$('send').disabled=v;$('backendState').textContent=v?'PROCESSING':'READY';$('chatStatus').textContent=v?'● выполняется сценарий':'● демонстрационный режим'}
-function decodeVin(){const vin=$('vin').value.trim().toUpperCase();$('vin').value=vin;if(vin.length!==17){plainMessage('VIN должен содержать 17 символов. Проверьте ввод.');log('Проверка формата VIN','Длина VIN не равна 17 символам.','Локальная проверка формата','demo-event');return}if(vin!=='WVWZZZAUZJP594600'){plainMessage('Этот VIN не входит в фиксированный набор v1.9. Для этого демонстрационного примера используйте VIN WVWZZZAUZJP594600. Реальный VIN-декодер не подключён.');log('VIN отсутствует в демо-наборе','Неизвестный VIN не подменяется карточкой Volkswagen.','Локальная проверка demo fixture','demo-event');return}confirmed=false;$('vehicleCard').style.display='block';$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';log('VIN получен','VIN: '+vin,'Клиентский мессенджер / VIN input');log('Запрос декодирования VIN','В реальном продукте здесь вызывается VIN-provider. В демо возвращается фиксированная карточка Volkswagen.','DEMO VIN decoder · фиксированный fixture','demo-event');showVehicleInChat();}
+function decodeVin(){const vin=$('vin').value.trim().toUpperCase();$('vin').value=vin;if(vin.length!==17){plainMessage('VIN должен содержать 17 символов. Проверьте ввод.');log('Проверка формата VIN','Длина VIN не равна 17 символам.','Локальная проверка формата','demo-event');return}if(vin!=='WVWZZZAUZJP594600'){plainMessage('Этот VIN не входит в фиксированный набор v1.9. Для этого демонстрационного примера используйте VIN WVWZZZAUZJP594600. Реальный VIN-декодер не подключён.');log('VIN отсутствует в демо-наборе','Неизвестный VIN не подменяется карточкой Volkswagen.','Локальная проверка demo fixture','demo-event');return}confirmed=false;selectionState={vin,vehicle:'VOLKSWAGEN_GOLF_2018',confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};renderSelectionTree();$('vehicleCard').style.display='block';$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';log('VIN получен','VIN: '+vin,'Клиентский мессенджер / VIN input');log('Запрос декодирования VIN','В реальном продукте здесь вызывается VIN-provider. В демо возвращается фиксированная карточка Volkswagen.','DEMO VIN decoder · фиксированный fixture','demo-event');showVehicleInChat();}
 $('decode').onclick=decodeVin;
 $('clearVin').onclick=()=>{$('vin').value='';plainMessage('Поле VIN очищено. Введите 17 символов и нажмите «Определить по VIN».')};
 function vehicleCardMessage(){return '<span class="demo-flag">DEMONSTRATION DATA · НЕ РЕЗУЛЬТАТ РЕАЛЬНОГО VIN-СЕРВИСА</span><div class="vehicle-msg"><div style="font-size:11px;color:#9bb0c4;font-weight:700">Результат определения VIN</div><div style="font-size:13px;font-weight:800;color:#76e0b5;margin:3px 0 8px">Автомобиль определён</div><div style="font-size:10px;color:#9bb0c4">VIN</div><div class="vtitle">WVWZZZAUZJP594600</div><div class="vtitle" style="margin-top:7px">VOLKSWAGEN Golf / Variant / 4Motion</div><table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:10px"><thead><tr style="color:#9bb0c4;text-align:left"><th style="padding:6px;border-bottom:1px solid #38516a">Характеристика</th><th style="padding:6px;border-bottom:1px solid #38516a">Данные</th></tr></thead><tbody><tr><td style="padding:6px;border-bottom:1px solid #29445b">Дата</td><td style="padding:6px;border-bottom:1px solid #29445b">20.03.2018</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Год выпуска</td><td style="padding:6px;border-bottom:1px solid #29445b">2018</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Производственный диапазон</td><td style="padding:6px;border-bottom:1px solid #29445b">2017–2020</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Рынок</td><td style="padding:6px;border-bottom:1px solid #29445b">Европа</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Код двигателя</td><td style="padding:6px;border-bottom:1px solid #29445b">DDYA</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Двигатель</td><td style="padding:6px;border-bottom:1px solid #29445b">1600 CC / 115 hp / 85 kW TDI CR</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Трансмиссия</td><td style="padding:6px;border-bottom:1px solid #29445b">SSV (7A)</td></tr><tr><td style="padding:6px;border-bottom:1px solid #29445b">Цвет кузова</td><td style="padding:6px;border-bottom:1px solid #29445b">X3X3</td></tr><tr><td style="padding:6px">Цвет отделки</td><td style="padding:6px">TW</td></tr></tbody></table><div class="hint">Карточка демонстрационная. Для реального определения требуется подключение VIN-провайдера.</div><div style="font-weight:800;margin-top:10px">Это ваш автомобиль?</div></div><div class="msg-actions"><button onclick="confirmVehicle()">Да, подтверждаю</button><button class="reject" onclick="recheckVin()">Нет, проверить VIN</button></div>'}
 function showVehicleInChat(){message(vehicleCardMessage());$('vehicleCard').style.display='block';}
-function confirmVehicle(){if(confirmed)return;confirmed=true;$('yes').disabled=true;$('no').disabled=true;$('vehicleCard').querySelector('.status').textContent='ПОДТВЕРЖДЕНО В ДЕМО';$('vehicleCard').querySelector('.status').style.color='var(--green)';log('Автомобиль подтверждён клиентом','Volkswagen Golf / Variant / 4Motion · 2018 · DDYA','Действие клиента · кнопка подтверждения','success');message('Автомобиль подтверждён. Какие запчасти нужно подобрать? Например: «Нужны передние тормозные колодки».');plainMessage('Да, подтверждаю','user');}
+function confirmVehicle(){if(confirmed)return;confirmed=true;selectionState.confirmed=true;renderSelectionTree();$('yes').disabled=true;$('no').disabled=true;$('vehicleCard').querySelector('.status').textContent='ПОДТВЕРЖДЕНО В ДЕМО';$('vehicleCard').querySelector('.status').style.color='var(--green)';log('Автомобиль подтверждён клиентом','Volkswagen Golf / Variant / 4Motion · 2018 · DDYA','Действие клиента · кнопка подтверждения','success');message('Автомобиль подтверждён. Какие запчасти нужно подобрать? Например: «Нужны передние тормозные колодки».');plainMessage('Да, подтверждаю','user');}
 function recheckVin(){confirmed=false;$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОВТОРНОЙ ПРОВЕРКИ';$('vehicleCard').querySelector('.status').style.color='';log('Запрошена повторная проверка VIN','В реальной системе потребуется повторный вызов внешнего декодера или проверка оператором.','Действие клиента · кнопка повторной проверки','demo-event');plainMessage('Нет, проверить VIN','user');message('Проверим VIN повторно. Отправьте правильный VIN из 17 символов следующим сообщением. Внешний VIN-provider в демоверсии не подключён.');}
 $('yes').onclick=confirmVehicle;$('no').onclick=recheckVin;
 
@@ -205,7 +239,7 @@ function selectDiagramPosition(sessionId,n){
  const note=$(sessionId+"-note");if(note)note.textContent=session.selected.length?"Выбраны позиции: "+session.selected.sort((a,b)=>a-b).join(", ")+". Нажмите «Подтвердить выбранные позиции».":"Ничего не выбрано.";
  const card=note?.closest(".diagram-card");if(!card)return;
  card.querySelectorAll("[data-n]").forEach(el=>el.classList.toggle("selected",session.selected.includes(Number(el.dataset.n))));
- log("Позиция схемы выбрана", "Схема "+diagramFixtures[session.group].id+" · callout "+n+" · "+part.name,"DiagramCallout · structured demo mapping","demo-event");
+ selectionState.selected=Object.values(activeDiagramSessions).flatMap(x=>x.selected.map(n=>({diagram:diagramFixtures[x.group].id,position:n,name:diagramFixtures[x.group].parts.find(p=>p.n===n)?.name})));renderSelectionTree();log("Позиция схемы выбрана", "Схема "+diagramFixtures[session.group].id+" · callout "+n+" · "+part.name,"DiagramCallout · structured demo mapping","demo-event");
 }
 function clearDiagramSelection(sessionId){
  const session=activeDiagramSessions[sessionId];if(!session)return;session.selected=[];
@@ -230,7 +264,7 @@ function resolveDiagramSelection(sessionId){
  const next=document.createElement("p");next.textContent="Позиции разрешены по структурированной тестовой карте callout → catalog item. В реальном продукте здесь требуется точная ревизия OEM-каталога и проверка применяемости.";result.append(next);
  const time=document.createElement("span");time.className="time";time.textContent=now();result.append(time);
  $("messages").append(result);$("messages").scrollTop=$("messages").scrollHeight;
- log("Callout сопоставлен с тестовыми деталями",chosen.length+" позиция(й) разрешено. Реальный OE/fitment не подтверждён.","Demo DiagramCallout → CatalogItemOE fixture","demo-event");
+ selectionState.resolved=Object.values(activeDiagramSessions).flatMap(x=>x.selected.map(n=>{const p=diagramFixtures[x.group].parts.find(z=>z.n===n);return {item:p.code,oe:p.test,analogs:p.analogs}}));renderSelectionTree();log("Callout сопоставлен с тестовыми деталями",chosen.length+" позиция(й) разрешено. Реальный OE/fitment не подтверждён.","Demo DiagramCallout → CatalogItemOE fixture","demo-event");
 }
 async function handlePartsRequest(requestText){
  if(flowRunning)return;const groups=identifyRequestedNodes(requestText);
@@ -238,9 +272,9 @@ async function handlePartsRequest(requestText){
  setBusy(true);
  log("Список запчастей принят",requestText,"Клиентский мессенджер");
  await delay(300);
- log("Список разобран на каталожные узлы",groups.map(g=>diagramFixtures[g].node).join("; "),"Demo parts intent resolver · keyword rules","demo-event");
+ selectionState.request=requestText;selectionState.nodes=groups.map(g=>diagramFixtures[g].node);selectionState.diagrams=[];selectionState.selected=[];selectionState.resolved=[];renderSelectionTree();log("Список разобран на каталожные узлы",groups.map(g=>diagramFixtures[g].node).join("; "),"Demo parts intent resolver · keyword rules","demo-event");
  await delay(300);
- groups.forEach(group=>renderDiagram(group,requestText));
+ groups.forEach(group=>{renderDiagram(group,requestText);selectionState.diagrams.push(diagramFixtures[group].id)});renderSelectionTree();
  message("Выберите на каждой схеме нужные номера позиций. После подтверждения покажу соответствующие тестовые коды деталей и условные аналоги. Никакие реальные OEM-номера пока не используются.");
  setBusy(false);
 }
@@ -308,7 +342,7 @@ $('dictate').onclick=()=>{
 };
 $('files').addEventListener('change',e=>{const fs=[...e.target.files];$('fileList').textContent=fs.length?fs.map(f=>f.name+' ('+Math.round(f.size/1024)+' KB)').join(' · '):'Файлы не выбраны';log('Вложения выбраны',fs.length+' файл(ов): '+fs.map(f=>f.name).join(', '),'Локальный file input · файлы не загружаются','demo-event');if(fs.length)plainMessage('Прикреплены файлы: '+fs.map(f=>f.name).join(', '),'user')});
 $('voice').onclick=async()=>{if(recorder&&recorder.state==='recording'){recorder.stop();$('voice').textContent='🎙 Записать голос';return}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recorder=new MediaRecorder(stream);chunks=[];recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};recorder.onstop=()=>{const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});const file=new File([blob],'voice-message.webm',{type:blob.type});const dt=new DataTransfer();dt.items.add(file);$('files').files=dt.files;$('fileList').textContent='voice-message.webm ('+Math.round(blob.size/1024)+' KB) · локальная запись';$('voiceStatus').textContent='Голосовое сообщение записано локально.';log('Голосовое сообщение записано','Аудиофайл создан в браузере; отправка на сервер отключена.','MediaRecorder API · local browser','demo-event');plainMessage('Голосовое сообщение записано и прикреплено локально.','user');stream.getTracks().forEach(t=>t.stop())};recorder.start();$('voice').textContent='■ Остановить запись';$('voiceStatus').textContent='Идёт запись…';}catch(err){$('voiceStatus').textContent='Нет доступа к микрофону или браузер не поддерживает запись.';log('Запись голоса недоступна',String(err),'Браузер / разрешения микрофона','demo-event')}};
-$('reset').onclick=()=>{confirmed=false;flowRunning=false;$('yes').disabled=false;$('no').disabled=false;$('backendState').textContent='IDLE';$('timeline').innerHTML='';$('messages').innerHTML='';$('chatStatus').textContent='● демонстрационный режим';$('vin').value='';$('vehicleCard').style.display='none';$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';log('Демонстрация перезапущена','Ожидание VIN от клиента в мессенджере.');message('Добрый день! Для правильного подбора необходим VIN вашего автомобиля. Отправьте VIN сообщением — он состоит из 17 символов.');};
+$('reset').onclick=()=>{confirmed=false;flowRunning=false;selectionState={vin:null,vehicle:null,confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};renderSelectionTree();$('yes').disabled=false;$('no').disabled=false;$('backendState').textContent='IDLE';$('timeline').innerHTML='';$('messages').innerHTML='';$('chatStatus').textContent='● демонстрационный режим';$('vin').value='';$('vehicleCard').style.display='none';$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';log('Демонстрация перезапущена','Ожидание VIN от клиента в мессенджере.');message('Добрый день! Для правильного подбора необходим VIN вашего автомобиля. Отправьте VIN сообщением — он состоит из 17 символов.');};
 // VIN is requested in the customer messenger; no vehicle card is shown until the client sends it.
 </script>
 </body>
