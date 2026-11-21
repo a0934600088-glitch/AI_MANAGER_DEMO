@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO v1.5
+# AI_MANAGER_DEMO v1.6
 
 Static browser prototype for the AI Manager automotive-parts sales workflow.
 
@@ -6,21 +6,29 @@ Static browser prototype for the AI Manager automotive-parts sales workflow.
 
 https://a0934600088-glitch.github.io/AI_MANAGER_DEMO/
 
-## Included in v1.5
+## Included in v1.6
 
 - Three-column workspace: VIN and vehicle context; backend activity journal; customer messenger.
 - No manual vehicle selector.
 - Volkswagen vehicle card shown inside the chat with **Да, подтверждаю** and **Нет, проверить VIN** actions.
 - Guided demo flow: VIN → customer confirmation → brake-pad request → catalog lookup → OEM mapping → analogues → customer offer.
+- **Architecture requirement added: Original Parts Diagram Selection.** After vehicle confirmation, AI Manager requests the exact original-catalog diagram for the requested node, sends it into the chat, lets the customer select a numbered callout, resolves that callout through structured catalog data to an OE/OEM number, and then continues to validated analogues and pricing.
 - Left-side text context, file attachments, and optional microphone recording.
 - Responsive layout for desktop, tablet, and mobile.
 
+## Architecture specification
+
+See [docs/ORIGINAL_PARTS_DIAGRAM_SELECTION.md](docs/ORIGINAL_PARTS_DIAGRAM_SELECTION.md) for module boundaries, domain entities, workflow, logical API/events, reliability rules, UI requirements, and acceptance criteria.
+
+The module is a first-class capability in the planned **Catalog & Fitment** domain, orchestrated by the conversation/application layer and integrated with Vehicle/VIN, OEM catalog adapters, cross-reference, fitment, inventory/pricing, Operator Console, and audit.
+
 ## Strict demo boundaries
 
-This repository contains a static frontend only. The v1.5 workflow is a client-side simulation, not a live backend integration.
+This repository contains a static frontend only. The v1.6 workflow is a client-side simulation, not a live backend integration.
 
 - The Volkswagen VIN card is a fixed demonstration fixture. No VIN decoder or Parts-Catalogs request is made.
 - Catalog search, OEM mapping, analogues, fitment status, and offer price are synthetic demonstration records.
+- Original Parts Diagram Selection is specified in the architecture document; this static demo does not connect to ETKA or another live OEM catalog and does not validate real callout-to-OE mappings.
 - The journal labels mock sources explicitly. “Demo flow passed” does not mean real compatibility was established.
 - Selected files and recorded audio remain in the browser; no upload endpoint exists.
 - No live inventory, supplier pricing, order creation, checkout, or payment is available.
