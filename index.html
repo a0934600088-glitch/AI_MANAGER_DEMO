@@ -28,10 +28,26 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 @keyframes appear{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(max-width:1120px){.workspace{grid-template-columns:minmax(260px,.9fr) minmax(330px,1.1fr)}.chat-panel{grid-column:1/-1;min-height:620px}.chat-messages{min-height:420px}}
 @media(max-width:720px){main{padding:10px}.workspace{grid-template-columns:1fr}.panel{min-height:auto}.chat-panel{grid-column:auto;min-height:650px}.panel-body{max-height:none}.chat-messages{min-height:450px}header{padding:0 12px}.demo{font-size:9px}.intro{align-items:flex-start;flex-direction:column}}
+
+.diagram-card{margin-top:8px;border:1px solid #38536d;background:#101f30;border-radius:11px;padding:10px}
+.diagram-head{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.diagram-head strong{font-size:12px}.diagram-head small{font-size:9px;color:var(--amber)}
+.diagram-svg{display:block;width:100%;height:auto;max-height:260px;background:#0b1725;border-radius:8px;margin:9px 0}
+.diagram-svg .part{fill:#304c66;stroke:#a9c6df;stroke-width:3;stroke-linejoin:round}
+.diagram-svg .line{fill:none;stroke:#9db8d0;stroke-width:5;stroke-linecap:round}
+.diagram-svg .call{cursor:pointer;fill:#f1c36d;stroke:#15283a;stroke-width:3}
+.diagram-svg .call.selected{fill:#51d5a0;stroke:#eafff7}
+.diagram-svg .call-text{font-size:13px;font-weight:900;fill:#101827;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.callout-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.callout-btn{background:#20364d;color:#eaf3fc;border:1px solid #3b5873;text-align:left;font-size:10px;padding:8px;border-radius:8px}
+.callout-btn.selected{background:#14513f;border-color:#51d5a0;color:#eafff7}
+.diagram-actions{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.diagram-actions button{font-size:10px;padding:8px}
+.selection-note{font-size:10px;color:#a9c1d6;margin-top:8px}
 </style>
 </head>
 <body>
-<header><div class="brand">AI <b>MANAGER</b><span class="version">DEMO v1.7</span></div><div class="demo">DEMONSTRATION DATA · NO LIVE CATALOG</div></header>
+<header><div class="brand">AI <b>MANAGER</b><span class="version">DEMO v1.9</span></div><div class="demo">DEMONSTRATION DATA · NO LIVE CATALOG</div></header>
 <main>
 <div class="intro"><div><h1>Подбор автозапчастей — рабочий сценарий</h1><p>VIN → подтверждение автомобиля → запрос детали → каталог → OEM → аналоги → предложение</p></div><button class="ghost" id="reset">Перезапустить демо</button></div>
 <div class="workspace">
@@ -59,7 +75,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </section>
 <section class="panel">
 <div class="panel-head"><h2>02 · ЖУРНАЛ BACKEND</h2><span class="sub" id="backendState">IDLE</span></div>
-<div class="panel-body"><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v1.7</div></div></div></div></div>
+<div class="panel-body"><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v1.9</div></div></div></div></div>
 </section>
 <section class="panel chat-panel">
 <div class="panel-head"><h2>03 · КЛИЕНТСКИЙ МЕССЕНДЖЕР</h2><span class="sub">CHAT UI</span></div>
@@ -81,7 +97,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </div>
 </section>
 </div>
-<div class="footer">AI_MANAGER_DEMO v1.7 · Каталоги, OEM, аналоги, цены и проверки совместимости — синтетические данные. Внешние API и реальные заказы не используются.</div>
+<div class="footer">AI_MANAGER_DEMO v1.9 · Схемы, позиции, OEM, аналоги, цены и проверки совместимости — синтетические демонстрационные данные. Внешние API и реальные заказы не используются.</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -100,8 +116,151 @@ function showVehicleInChat(){message(vehicleCardMessage());$('vehicleCard').styl
 function confirmVehicle(){if(confirmed)return;confirmed=true;$('yes').disabled=true;$('no').disabled=true;$('vehicleCard').querySelector('.status').textContent='ПОДТВЕРЖДЕНО В ДЕМО';$('vehicleCard').querySelector('.status').style.color='var(--green)';log('Автомобиль подтверждён клиентом','Volkswagen Golf / Variant / 4Motion · 2018 · DDYA','Действие клиента · кнопка подтверждения','success');message('Автомобиль подтверждён. Какие запчасти нужно подобрать? Например: «Нужны передние тормозные колодки».');plainMessage('Да, подтверждаю','user');}
 function recheckVin(){confirmed=false;$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОВТОРНОЙ ПРОВЕРКИ';$('vehicleCard').querySelector('.status').style.color='';log('Запрошена повторная проверка VIN','В реальной системе потребуется повторный вызов внешнего декодера или проверка оператором.','Действие клиента · кнопка повторной проверки','demo-event');plainMessage('Нет, проверить VIN','user');message('Проверим VIN повторно. Отправьте правильный VIN из 17 символов следующим сообщением. Внешний VIN-provider в демоверсии не подключён.');}
 $('yes').onclick=confirmVehicle;$('no').onclick=recheckVin;
-async function runPartsFlow(){if(flowRunning)return;setBusy(true);log('Запрос клиента принят','Передние тормозные колодки для подтверждённого Volkswagen Golf.','Клиентский чат · текстовый запрос');await delay(550);log('Определён контекст автомобиля','VIN WVWZZZAUZJP594600 · Volkswagen Golf / Variant / 4Motion · 2018 · DDYA.','Vehicle context · подтверждённая демо-карточка');await delay(650);log('Запрос к каталогу деталей','Группа: тормозная система → передние тормозные колодки. Выполняется имитация поиска.','DEMO Parts Catalog adapter · локальный fixture','demo-event');await delay(700);log('Каталожная позиция найдена','Найдена условная позиция DEMO-VAG-BRAKE-FRONT-01. Это не реальный номер производителя.','Локальный набор демонстрационных данных','demo-event');await delay(600);log('OEM-сопоставление','Условный OEM: DEMO-OEM-5Q0698151. Не является подтверждённым OEM-номером VW.','DEMO OEM mapping · синтетическая запись','demo-event');await delay(600);log('Поиск аналогов','Подготовлены два условных аналога для показа интерфейса. Совместимость не проверялась по реальному каталогу.','DEMO Cross-reference dataset · synthetic','demo-event');await delay(600);log('Проверка совместимости','Показан статус «демо-сценарий пройден». Реальная применяемость к VIN не подтверждена.','Mock fitment rules · не Parts-Catalogs','demo-event');await delay(600);message('Подготовил демонстрационное предложение по передним тормозным колодкам:<div class="offer"><span class="demo-flag">DEMO OFFER · НЕ ДЛЯ ПОКУПКИ</span><strong>Передние тормозные колодки</strong><p>Условный OEM: DEMO-OEM-5Q0698151</p><p>Аналог A: DEMO-BRAKE-ALT-A</p><p>Аналог B: DEMO-BRAKE-ALT-B</p><div class="price">€ 48.90</div><small>Цена, номера, наличие и применяемость вымышлены. Совместимость не подтверждена реальными данными.</small></div><div class="msg-actions"><button onclick="plainMessage(\'Хочу уточнить предложение\',\'user\');message(\'Это демонстрационный сценарий. Реальная проверка и оформление заказа отключены.\')">Уточнить предложение</button><button class="reject" onclick="plainMessage(\'Показать аналоги\',\'user\');message(\'Аналоги A и B показаны как синтетические записи. Подтвердить их совместимость можно только после интеграции реального каталога.\')">Показать аналоги</button></div>');setBusy(false)}
-function sendMessage(){const value=$('chatInput').value.trim();if(!value||flowRunning)return;$('chatInput').value='';plainMessage(value,'user');const vinMatch=value.toUpperCase().match(/[A-HJ-NPR-Z0-9]{17}/);if(vinMatch){const vin=vinMatch[0];$('vin').value=vin;if(vin==='WVWZZZAUZJP594600'){confirmed=false;$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';$('vehicleCard').style.display='block';log('VIN получен из клиентского чата','VIN: '+vin,'Клиентский мессенджер · входящее сообщение');log('Определение автомобиля по VIN','Отображается заранее подготовленная карточка Volkswagen. Реальный VIN-provider не вызывается.','DEMO VIN decoder · фиксированный fixture','demo-event');showVehicleInChat()}else{log('VIN не найден в демо-наборе','VIN: '+vin+' · фиксированный VIN fixture не совпадает.','Локальная проверка demo fixture','demo-event');message('VIN получен, но этот номер отсутствует в фиксированном демонстрационном наборе. Реальный VIN-декодер не подключён, поэтому я не буду показывать неподтверждённые данные автомобиля. Проверьте VIN или используйте демонстрационный WVWZZZAUZJP594600.')}return}const low=value.toLowerCase();if(!confirmed){message('Сначала отправьте VIN автомобиля из 17 символов. После этого в чате появится карточка автомобиля с кнопками подтверждения.');return}if(/колод|тормоз|brake/.test(low)){runPartsFlow();return}if(/аналог/.test(low)){message('В демо предусмотрены две условные записи аналогов. Сначала запустите подбор передних тормозных колодок.');return}message('Сообщение принято в демо-чате. Для демонстрации полного сценария напишите: «Нужны передние тормозные колодки».')}
+
+const diagramFixtures={
+ suspension:{
+  id:"DEMO-DIAG-VAG-FRONT-SUSP-01",title:"Передняя подвеска · рычаги и шаровые",node:"Передняя подвеска",
+  description:"Условная схема передней подвески для демонстрации выбора позиций. Не является оригинальной схемой VW.",
+  parts:[
+   {n:1,name:"Левый передний рычаг",code:"DEMO-PART-CTRL-ARM-L",test:"DEMO-OE-CTRL-ARM-L",analogs:["DEMO-ALT-ARM-L-A","DEMO-ALT-ARM-L-B"]},
+   {n:2,name:"Правый передний рычаг",code:"DEMO-PART-CTRL-ARM-R",test:"DEMO-OE-CTRL-ARM-R",analogs:["DEMO-ALT-ARM-R-A","DEMO-ALT-ARM-R-B"]},
+   {n:3,name:"Передний сайлентблок рычага",code:"DEMO-PART-BUSH-FRONT",test:"DEMO-OE-BUSH-FRONT",analogs:["DEMO-ALT-BUSH-F-A","DEMO-ALT-BUSH-F-B"]},
+   {n:4,name:"Задний сайлентблок рычага",code:"DEMO-PART-BUSH-REAR",test:"DEMO-OE-BUSH-REAR",analogs:["DEMO-ALT-BUSH-R-A","DEMO-ALT-BUSH-R-B"]},
+   {n:5,name:"Шаровая опора",code:"DEMO-PART-BALL-JOINT",test:"DEMO-OE-BALL-JOINT",analogs:["DEMO-ALT-BJ-A","DEMO-ALT-BJ-B"]},
+   {n:6,name:"Стойка стабилизатора",code:"DEMO-PART-STABILIZER-LINK",test:"DEMO-OE-STABILIZER-LINK",analogs:["DEMO-ALT-SL-A","DEMO-ALT-SL-B"]}
+  ]
+ },
+ brakes:{
+  id:"DEMO-DIAG-VAG-FRONT-BRAKE-01",title:"Передний тормозной механизм",node:"Передние тормоза",
+  description:"Условная схема тормозного узла для демонстрации выбора позиций. Не является оригинальной схемой VW.",
+  parts:[
+   {n:1,name:"Передние тормозные колодки",code:"DEMO-PART-BRAKE-PAD-F",test:"DEMO-OE-BRAKE-PAD-F",analogs:["DEMO-ALT-PAD-A","DEMO-ALT-PAD-B"]},
+   {n:2,name:"Тормозной суппорт",code:"DEMO-PART-CALIPER-F",test:"DEMO-OE-CALIPER-F",analogs:["DEMO-ALT-CAL-A","DEMO-ALT-CAL-B"]},
+   {n:3,name:"Тормозной диск",code:"DEMO-PART-DISC-F",test:"DEMO-OE-DISC-F",analogs:["DEMO-ALT-DISC-A","DEMO-ALT-DISC-B"]},
+   {n:4,name:"Скоба суппорта",code:"DEMO-PART-CARRIER-F",test:"DEMO-OE-CARRIER-F",analogs:["DEMO-ALT-CAR-A","DEMO-ALT-CAR-B"]}
+  ]
+ }
+};
+let diagramSessionCounter=0,activeDiagramSessions={};
+function identifyRequestedNodes(text){
+ const s=text.toLowerCase(),groups=[];
+ if(/рычаг|сайлентблок|сайлент.блок|шарова|шарнир|подвеск|амортизатор|стойк[аи].{0,12}стабилизатор|тяга стабилизатор/.test(s))groups.push("suspension");
+ if(/колод|тормоз|суппорт|диск.{0,12}тормоз/.test(s))groups.push("brakes");
+ return [...new Set(groups)];
+}
+function diagramSvg(group,sessionId){
+ if(group==="suspension")return `<svg class="diagram-svg" viewBox="0 0 520 270" role="img" aria-label="Условная схема передней подвески">
+ <path class="line" d="M70 38 L450 38 M95 38 L95 220 M425 38 L425 220"/>
+ <path class="part" d="M115 184 L245 128 L285 145 L178 224 Z"/><path class="part" d="M405 184 L275 128 L235 145 L342 224 Z"/>
+ <path class="line" d="M95 78 L150 118 L180 160 M425 78 L370 118 L340 160"/>
+ <path class="part" d="M215 38 L235 110 L250 130 L265 110 L285 38 Z"/>
+ <path class="line" d="M160 195 L130 225 M360 195 L390 225"/>
+ <path class="part" d="M235 125 L285 125 L300 150 L220 150 Z"/>
+ <g onclick="selectDiagramPosition('${sessionId}',1)"><circle class="call" data-n="1" cx="145" cy="190" r="15"/><text class="call-text" x="145" y="190">1</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',2)"><circle class="call" data-n="2" cx="375" cy="190" r="15"/><text class="call-text" x="375" y="190">2</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',3)"><circle class="call" data-n="3" cx="184" cy="150" r="15"/><text class="call-text" x="184" y="150">3</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',4)"><circle class="call" data-n="4" cx="335" cy="150" r="15"/><text class="call-text" x="335" y="150">4</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',5)"><circle class="call" data-n="5" cx="250" cy="145" r="15"/><text class="call-text" x="250" y="145">5</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',6)"><circle class="call" data-n="6" cx="250" cy="65" r="15"/><text class="call-text" x="250" y="65">6</text></g>
+ </svg>`;
+ return `<svg class="diagram-svg" viewBox="0 0 520 270" role="img" aria-label="Условная схема переднего тормозного механизма">
+ <circle class="part" cx="250" cy="135" r="92"/><circle cx="250" cy="135" r="58" fill="#0b1725" stroke="#a9c6df" stroke-width="5"/><circle cx="250" cy="135" r="18" fill="#304c66" stroke="#a9c6df" stroke-width="4"/>
+ <path class="part" d="M120 75 L190 65 L210 95 L205 178 L160 195 L112 160 Z"/><path class="line" d="M150 80 L150 190"/>
+ <path class="part" d="M305 45 L375 45 L400 85 L385 170 L325 170 L300 125 Z"/>
+ <g onclick="selectDiagramPosition('${sessionId}',1)"><circle class="call" data-n="1" cx="155" cy="132" r="15"/><text class="call-text" x="155" y="132">1</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',2)"><circle class="call" data-n="2" cx="365" cy="108" r="15"/><text class="call-text" x="365" y="108">2</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',3)"><circle class="call" data-n="3" cx="250" cy="40" r="15"/><text class="call-text" x="250" y="40">3</text></g>
+ <g onclick="selectDiagramPosition('${sessionId}',4)"><circle class="call" data-n="4" cx="405" cy="190" r="15"/><text class="call-text" x="405" y="190">4</text></g>
+ </svg>`;
+}
+function renderDiagram(group,requestedText){
+ const fixture=diagramFixtures[group],sessionId="diag-"+(++diagramSessionCounter);
+ activeDiagramSessions[sessionId]={group,selected:[],requestedText};
+ const box=document.createElement("div");box.className="msg";box.style.maxWidth="100%";
+ const title=document.createElement("div");title.className="demo-flag";title.textContent="ORIGINAL PARTS DIAGRAM SELECTION · TEST FIXTURE";
+ box.append(title);
+ const card=document.createElement("div");card.className="diagram-card";
+ const head=document.createElement("div");head.className="diagram-head";
+ const strong=document.createElement("strong");strong.textContent=fixture.title;
+ const tag=document.createElement("small");tag.textContent="ТЕСТОВАЯ СХЕМА · НЕ OEM";
+ head.append(strong,tag);card.append(head);
+ const desc=document.createElement("p");desc.className="hint";desc.textContent=fixture.description+" Автомобиль: VW Golf 2018 · VIN WVWZZZAUZJP594600 (демо).";card.append(desc);
+ card.insertAdjacentHTML("beforeend",diagramSvg(group,sessionId));
+ const list=document.createElement("div");list.className="callout-list";
+ fixture.parts.forEach(part=>{const b=document.createElement("button");b.type="button";b.className="callout-btn";b.dataset.n=part.n;b.textContent=part.n+". "+part.name;b.onclick=()=>selectDiagramPosition(sessionId,part.n);list.append(b)});
+ card.append(list);
+ const note=document.createElement("div");note.className="selection-note";note.id=sessionId+"-note";note.textContent="Нажмите номер позиции на схеме или в списке. Можно выбрать несколько деталей.";card.append(note);
+ const actions=document.createElement("div");actions.className="diagram-actions";
+ const confirm=document.createElement("button");confirm.type="button";confirm.textContent="Подтвердить выбранные позиции";confirm.onclick=()=>resolveDiagramSelection(sessionId);
+ const clear=document.createElement("button");clear.type="button";clear.className="secondary";clear.textContent="Сбросить выбор";clear.onclick=()=>clearDiagramSelection(sessionId);
+ actions.append(confirm,clear);card.append(actions);box.append(card);
+ const time=document.createElement("span");time.className="time";time.textContent=now();box.append(time);
+ $("messages").append(box);$("messages").scrollTop=$("messages").scrollHeight;
+ log("Тестовая схема узла открыта",fixture.title+" · session "+sessionId,"Original Parts Diagram Selection · local fixture","demo-event");
+}
+function selectDiagramPosition(sessionId,n){
+ const session=activeDiagramSessions[sessionId];if(!session)return;
+ const part=diagramFixtures[session.group].parts.find(p=>p.n===n);if(!part)return;
+ const i=session.selected.indexOf(n);if(i>=0)session.selected.splice(i,1);else session.selected.push(n);
+ const note=$(sessionId+"-note");if(note)note.textContent=session.selected.length?"Выбраны позиции: "+session.selected.sort((a,b)=>a-b).join(", ")+". Нажмите «Подтвердить выбранные позиции».":"Ничего не выбрано.";
+ const card=note?.closest(".diagram-card");if(!card)return;
+ card.querySelectorAll("[data-n]").forEach(el=>el.classList.toggle("selected",session.selected.includes(Number(el.dataset.n))));
+ log("Позиция схемы выбрана", "Схема "+diagramFixtures[session.group].id+" · callout "+n+" · "+part.name,"DiagramCallout · structured demo mapping","demo-event");
+}
+function clearDiagramSelection(sessionId){
+ const session=activeDiagramSessions[sessionId];if(!session)return;session.selected=[];
+ const note=$(sessionId+"-note");if(note)note.textContent="Выбор сброшен. Отметьте одну или несколько позиций.";
+ const card=note?.closest(".diagram-card");if(card)card.querySelectorAll(".selected").forEach(el=>el.classList.remove("selected"));
+}
+function resolveDiagramSelection(sessionId){
+ const session=activeDiagramSessions[sessionId];if(!session||!session.selected.length){plainMessage("Сначала выберите хотя бы одну позицию на схеме.");return}
+ const fixture=diagramFixtures[session.group],chosen=fixture.parts.filter(p=>session.selected.includes(p.n));
+ log("Выбор позиций подтверждён",chosen.map(p=>p.n+". "+p.name).join("; "),"SelectDiagramPosition · structured demo selection","success");
+ const result=document.createElement("div");result.className="msg";result.style.maxWidth="100%";
+ const label=document.createElement("div");label.className="demo-flag";label.textContent="РАСШИФРОВКА ВЫБРАННЫХ ПОЗИЦИЙ · TEST DATA";result.append(label);
+ chosen.forEach(p=>{
+  const item=document.createElement("div");item.className="offer";
+  const name=document.createElement("strong");name.textContent="Поз. "+p.n+" — "+p.name;item.append(name);
+  const code=document.createElement("p");code.textContent="Внутренний код: "+p.code;item.append(code);
+  const oe=document.createElement("p");oe.textContent="Тестовый OE: "+p.test;item.append(oe);
+  const analog=document.createElement("small");analog.textContent="Тестовые аналоги: "+p.analogs.join(" · ");item.append(analog);
+  const disclaimer=document.createElement("small");disclaimer.style.display="block";disclaimer.textContent="Коды DEMO. Не являются реальными OEM-номерами или подтверждённой применяемостью.";item.append(disclaimer);
+  result.append(item);
+ });
+ const next=document.createElement("p");next.textContent="Позиции разрешены по структурированной тестовой карте callout → catalog item. В реальном продукте здесь требуется точная ревизия OEM-каталога и проверка применяемости.";result.append(next);
+ const time=document.createElement("span");time.className="time";time.textContent=now();result.append(time);
+ $("messages").append(result);$("messages").scrollTop=$("messages").scrollHeight;
+ log("Callout сопоставлен с тестовыми деталями",chosen.length+" позиция(й) разрешено. Реальный OE/fitment не подтверждён.","Demo DiagramCallout → CatalogItemOE fixture","demo-event");
+}
+async function handlePartsRequest(requestText){
+ if(flowRunning)return;const groups=identifyRequestedNodes(requestText);
+ if(!groups.length){message("Я пока не определил каталожный узел по этому списку. Уточните, пожалуйста, что нужно подобрать: переднюю подвеску (рычаги, сайлентблоки, шаровые) или передние тормоза (колодки, диски, суппорты).");log("Не удалось определить узел","Запрос требует уточнения; схема не подставляется наугад.","Demo node intent resolver","demo-event");return}
+ setBusy(true);
+ log("Список запчастей принят",requestText,"Клиентский мессенджер");
+ await delay(300);
+ log("Список разобран на каталожные узлы",groups.map(g=>diagramFixtures[g].node).join("; "),"Demo parts intent resolver · keyword rules","demo-event");
+ await delay(300);
+ groups.forEach(group=>renderDiagram(group,requestText));
+ message("Выберите на каждой схеме нужные номера позиций. После подтверждения покажу соответствующие тестовые коды деталей и условные аналоги. Никакие реальные OEM-номера пока не используются.");
+ setBusy(false);
+}
+
+function sendMessage(){
+ const value=$('chatInput').value.trim();if(!value||flowRunning)return;
+ $('chatInput').value='';plainMessage(value,'user');
+ const vinMatch=value.toUpperCase().match(/[A-HJ-NPR-Z0-9]{17}/);
+ if(vinMatch){
+  const vin=vinMatch[0];$('vin').value=vin;
+  if(vin==='WVWZZZAUZJP594600'){
+   confirmed=false;$('yes').disabled=false;$('no').disabled=false;$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';$('vehicleCard').style.display='block';
+   log('VIN получен из клиентского чата','VIN: '+vin,'Клиентский мессенджер · входящее сообщение');
+   log('Определение автомобиля по VIN','Отображается фиксированная карточка Volkswagen. Реальный VIN-provider не вызывается.','DEMO VIN decoder · fixed fixture','demo-event');showVehicleInChat();
+  }else{log('VIN не найден в демо-наборе','VIN: '+vin+' · fixed fixture не совпадает.','Локальная проверка demo fixture','demo-event');message('Этот VIN отсутствует в фиксированном демо-наборе. Реальный VIN-декодер не подключён, поэтому автомобиль не определён.');}
+  return;
+ }
+ if(!confirmed){message('Сначала отправьте VIN WVWZZZAUZJP594600 и подтвердите показанный автомобиль. До подтверждения схемы не открываются.');return}
+ handlePartsRequest(value);
+}
 $('send').onclick=sendMessage;$('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 $('pickFile').onclick=()=>$('chatFiles').click();
 $('pickPhoto').onclick=()=>$('chatPhotos').click();
