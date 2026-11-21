@@ -1,7 +1,7 @@
 # AI Manager — Original Parts Diagram Selection
 
 **Module ID:** `original_parts_diagram_selection`  
-**Status:** Architecture requirement approved; not implemented as a live catalog integration in the static demo.
+**Status:** Architecture requirement approved; an interactive synthetic front-end demo is implemented in AI_MANAGER_DEMO v1.9. Live OEM catalog integration remains unimplemented.
 
 ## Purpose
 
@@ -86,6 +86,12 @@ These are logical contracts for architecture planning, not existing deployed end
 6. The result and provenance are visible to the operator and recorded in the audit trail.
 7. The workflow supports mobile chat, multiple selections, retries, and operator escalation.
 
+## Demo implementation status
+
+`AI_MANAGER_DEMO` v1.9 implements a client-side test flow for front suspension/control arms and front brake assemblies. It parses supported part-list keywords after VIN confirmation, opens one or more hand-authored SVG test diagrams, supports multi-select numbered callouts, and resolves selections through local structured fixtures to synthetic catalog item IDs, test-only OE labels, and synthetic analogue IDs. Unsupported or ambiguous requests prompt for clarification rather than selecting an arbitrary diagram.
+
+These SVGs are explanatory test drawings, not original OEM diagrams. Their callout-to-part mappings are invented fixtures and do not establish real Volkswagen applicability or real OE numbers. The feature has no backend session persistence, live catalog access, or real OEM provider adapter.
+
 ## Demo boundary
 
-`AI_MANAGER_DEMO` may illustrate the sequence with synthetic diagrams and fixture data. A demo click or successful simulated mapping is not proof of real OEM catalog access, OE correctness, or vehicle fitment. Production requires authorized OEM catalog providers/adapters, structured callout mappings, and backend validation.
+`AI_MANAGER_DEMO` illustrates the sequence with synthetic diagrams and fixture data. A demo click or successful simulated mapping is not proof of real OEM catalog access, OE correctness, or vehicle fitment. Production requires authorized OEM catalog providers/adapters, structured callout mappings, and backend validation.
