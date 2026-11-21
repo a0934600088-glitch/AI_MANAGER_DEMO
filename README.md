@@ -1,10 +1,14 @@
-# AI_MANAGER_DEMO v1.9
+# AI_MANAGER_DEMO v2.0
 
 Static browser prototype for the AI Manager automotive-parts sales workflow.
 
 ## Published demo
 
 https://a0934600088-glitch.github.io/AI_MANAGER_DEMO/
+
+## Included in v2.0
+
+- Backend panel now displays a live, code-style selection hierarchy: VIN → confirmed vehicle → requested node/system → diagram → selected callouts → catalog item → OE reference → analogues. It updates as the customer progresses through the demo. All catalog identifiers remain explicitly marked as local synthetic fixtures.
 
 ## Included in v1.9
 
@@ -35,7 +39,7 @@ The module is a first-class capability in the planned **Catalog & Fitment** doma
 
 ## Strict demo boundaries
 
-This repository contains a static frontend only. The v1.9 workflow is a client-side simulation, not a live backend integration.
+This repository contains a static frontend only. The v2.0 and v1.9 workflows are client-side simulations, not a live backend integration.
 
 - The Volkswagen VIN card is a fixed demonstration fixture. No VIN decoder or Parts-Catalogs request is made.
 - Catalog search, OEM mapping, analogues, fitment status, and offer price are synthetic demonstration records.
