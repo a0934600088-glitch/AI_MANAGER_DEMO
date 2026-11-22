@@ -60,6 +60,8 @@ def _mcp_payload(response: httpx.Response) -> dict[str, Any]:
         raise MCPError(f"SoloCatalog MCP HTTP {response.status_code}")
     content_type = response.headers.get("content-type", "")
     body = response.text
+    if response.status_code == 202 and not body.strip():
+        return {}
     if "text/event-stream" in content_type:
         data_lines = [line[5:].strip() for line in body.splitlines() if line.startswith("data:")]
         if not data_lines:
@@ -75,6 +77,7 @@ async def mcp_request(client: httpx.AsyncClient, payload: dict, session_id: str 
     headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
     if session_id:
         headers["Mcp-Session-Id"] = session_id
+        headers["MCP-Protocol-Version"] = "2025-03-26"
     response = await client.post(SOLOCATALOG_MCP_URL, headers=headers, json=payload)
     return _mcp_payload(response), response.headers.get("Mcp-Session-Id", session_id)
 
