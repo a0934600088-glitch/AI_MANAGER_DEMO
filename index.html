@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#101827">
-<title>AI Manager — Demo v2.1.1</title>
+<title>AI Manager — v2.1.2 Live Catalog</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d2d;--panel2:#18263a;--line:#2a3b52;--text:#edf4fc;--muted:#9aabc0;--blue:#69a9ff;--green:#51d5a0;--amber:#f1c36d;--red:#f08080}
 *{box-sizing:border-box}body{margin:0;background:#0b1220;color:var(--text);font:14px/1.45 Inter,system-ui,Segoe UI,Arial,sans-serif}
@@ -106,7 +106,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </div>
 </section>
 </div>
-<div class="footer">AI_MANAGER_DEMO v2.1.1 · Исходный код SoloCatalog Adapter добавлен; live API не подключён. Схемы, позиции, OEM, аналоги, цены и проверки совместимости в демо остаются синтетическими. Внешние API и реальные заказы не используются.</div>
+<div class="footer">AI_MANAGER_DEMO v2.1.2 · Исходный код SoloCatalog Adapter добавлен; live API не подключён. Схемы, позиции, OEM, аналоги, цены и проверки совместимости в демо остаются синтетическими. Внешние API и реальные заказы не используются.</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -347,6 +347,79 @@ $('files').addEventListener('change',e=>{const fs=[...e.target.files];$('fileLis
 $('voice').onclick=async()=>{if(recorder&&recorder.state==='recording'){recorder.stop();$('voice').textContent='🎙 Записать голос';return}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recorder=new MediaRecorder(stream);chunks=[];recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};recorder.onstop=()=>{const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});const file=new File([blob],'voice-message.webm',{type:blob.type});const dt=new DataTransfer();dt.items.add(file);$('files').files=dt.files;$('fileList').textContent='voice-message.webm ('+Math.round(blob.size/1024)+' KB) · локальная запись';$('voiceStatus').textContent='Голосовое сообщение записано локально.';log('Голосовое сообщение записано','Аудиофайл создан в браузере; отправка на сервер отключена.','MediaRecorder API · local browser','demo-event');plainMessage('Голосовое сообщение записано и прикреплено локально.','user');stream.getTracks().forEach(t=>t.stop())};recorder.start();$('voice').textContent='■ Остановить запись';$('voiceStatus').textContent='Идёт запись…';}catch(err){$('voiceStatus').textContent='Нет доступа к микрофону или браузер не поддерживает запись.';log('Запись голоса недоступна',String(err),'Браузер / разрешения микрофона','demo-event')}};
 $('reset').onclick=()=>{confirmed=false;flowRunning=false;selectionState={vin:null,vehicle:null,confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};renderSelectionTree();$('yes').disabled=false;$('no').disabled=false;$('backendState').textContent='IDLE';$('timeline').innerHTML='';$('messages').innerHTML='';$('chatStatus').textContent='● демонстрационный режим';$('vin').value='';$('vehicleCard').style.display='none';$('vehicleCard').querySelector('.status').textContent='ОЖИДАЕТ ПОДТВЕРЖДЕНИЯ';$('vehicleCard').querySelector('.status').style.color='';log('Демонстрация перезапущена','Ожидание VIN от клиента в мессенджере.');message('Добрый день! Для правильного подбора необходим VIN вашего автомобиля. Отправьте VIN сообщением — он состоит из 17 символов.');};
 // VIN is requested in the customer messenger; no vehicle card is shown until the client sends it.
+
+/* AI Manager v2.1.2 — live catalogue mode. */
+const API_BASE = (window.AI_MANAGER_API_BASE || "").replace(/\/$/, "");
+let liveVehicle = null;
+let liveVehicleConfirmed = false;
+async function apiPost(path, body) {
+ const response = await fetch(API_BASE + path, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const data = await response.json().catch(()=>({detail:"Backend returned a non-JSON response"}));
+ if(!response.ok) throw new Error(typeof data.detail==="string"?data.detail:JSON.stringify(data.detail||data));
+ return data;
+}
+function liveJsonMessage(title, data, source) {
+ const box=document.createElement("div");box.className="msg";box.style.maxWidth="100%";
+ const flag=document.createElement("span");flag.className="demo-flag";flag.textContent=title+" · LIVE DATA";box.append(flag);
+ const pre=document.createElement("pre");pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#0b1725;border:1px solid #38516a;border-radius:8px;padding:10px;font:10px/1.45 ui-monospace,monospace;color:#d9e8f6";
+ pre.textContent=JSON.stringify(data,null,2);box.append(pre);
+ const note=document.createElement("p");note.className="hint";note.textContent=source;box.append(note);
+ const time=document.createElement("span");time.className="time";time.textContent=now();box.append(time);
+ $("messages").append(box);$("messages").scrollTop=$("messages").scrollHeight;
+}
+function providerSummary(data) {
+ return (data.providers||[]).map(p=>p.provider+": "+p.status+(p.error?" — "+p.error:"")).join(" · ");
+}
+async function liveDecode(vin) {
+ setBusy(true);$("chatStatus").textContent="● запрос к открытым VIN/catalog API";
+ log("VIN отправлен в реальные источники","Параллельный запрос SoloCatalog MCP + NHTSA vPIC.","AI Manager backend v2.1.2");
+ try {
+  const result=await apiPost("/api/catalog/v1/vehicles/decode",{vin,lang:"ru"});
+  liveVehicle=result;liveVehicleConfirmed=false;
+  selectionState={vin,vehicle:"LIVE_VIN_RESULT",confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};renderSelectionTree();
+  liveJsonMessage("РЕЗУЛЬТАТ ДЕКОДИРОВАНИЯ VIN",result,providerSummary(result)+" · VIN decoded, но совместимость детали ещё не подтверждена.");
+  const actions=document.createElement("div");actions.className="msg-actions";
+  const yes=document.createElement("button");yes.textContent="Подтвердить автомобиль";yes.onclick=()=>{liveVehicleConfirmed=true;selectionState.confirmed=true;renderSelectionTree();message("Автомобиль подтверждён. Напишите название детали или узла. Запрос пойдёт в SoloCatalog.");log("Автомобиль подтверждён","Клиент подтвердил полученный live VIN result.","Customer Messenger","success");yes.disabled=true;no.disabled=true;};
+  const no=document.createElement("button");no.className="reject";no.textContent="Не мой автомобиль";no.onclick=()=>{liveVehicleConfirmed=false;liveVehicle=null;message("VIN не подтверждён. Отправьте VIN повторно.");};
+  actions.append(yes,no);$("messages").append(actions);
+  log("VIN-декодирование завершено",providerSummary(result),"SoloCatalog MCP + NHTSA vPIC", "success");
+ } catch(err) {
+  liveJsonMessage("ОШИБКА VIN API",{message:String(err)},"Внешние источники недоступны. Система не подставила демонстрационный автомобиль.");
+  log("VIN API недоступен",String(err),"Live provider request","demo-event");
+ } finally {setBusy(false);}
+}
+async function livePartsLookup(textValue) {
+ if(!liveVehicleConfirmed||!liveVehicle){message("Сначала отправьте VIN и подтвердите автомобиль.");return;}
+ setBusy(true);selectionState.request=textValue;renderSelectionTree();
+ log("Запрос деталей отправлен в каталог",textValue,"Customer Messenger → SoloCatalog MCP");
+ try {
+  const [diagrams,parts]=await Promise.all([
+   apiPost("/api/catalog/v1/lookup",{mode:"diagrams",vin:liveVehicle.vin,lang:"ru"}).catch(e=>({error:String(e)})),
+   apiPost("/api/catalog/v1/lookup",{mode:"parts",vin:liveVehicle.vin,q:textValue,lang:"ru"}).catch(e=>({error:String(e)}))
+  ]);
+  liveJsonMessage("ОРИГИНАЛЬНЫЕ СХЕМЫ / КАТАЛОЖНЫЕ ГРУППЫ",diagrams,"Источник: SoloCatalog MCP. Если провайдер не вернул схему, результат будет показан как ошибка, а не заменён тестовым рисунком.");
+  liveJsonMessage("ПОИСК ДЕТАЛЕЙ / OEM",parts,"Источник: SoloCatalog MCP. OEM и применяемость считаются подтверждёнными только при наличии ответа каталога для этого VIN.");
+  const failed=Boolean(diagrams.error&&parts.error);
+  log(failed?"Каталог недоступен":"Ответ каталога получен",failed?"Оба запроса завершились ошибкой.": "Результаты схем и поиска показаны с указанием источника.","SoloCatalog MCP",failed?"demo-event":"success");
+ } catch(err) {message("Ошибка запроса каталога: "+String(err));}
+ finally {setBusy(false);}
+}
+async function sendLiveMessage(){
+ const value=$("chatInput").value.trim();if(!value||flowRunning)return;
+ $("chatInput").value="";plainMessage(value,"user");
+ const vinMatch=value.toUpperCase().match(/[A-HJ-NPR-Z0-9]{17}/);
+ if(vinMatch){await liveDecode(vinMatch[0]);return;}
+ if(!liveVehicleConfirmed){message("Сначала отправьте VIN автомобиля из 17 символов. До подтверждения автомобиля каталог деталей не вызывается.");return;}
+ await livePartsLookup(value);
+}
+$("send").onclick=sendLiveMessage;
+$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendLiveMessage();}});
+$("decode").onclick=()=>{const v=$("vin").value.trim().toUpperCase();if(v.length!==17){plainMessage("Введите VIN из 17 символов.");return;}plainMessage(v,"user");liveDecode(v);};
+$("yes").onclick=()=>{if(liveVehicle){liveVehicleConfirmed=true;selectionState.confirmed=true;renderSelectionTree();message("Автомобиль подтверждён. Теперь отправьте название детали.");}};
+$("no").onclick=()=>{liveVehicleConfirmed=false;liveVehicle=null;message("VIN не подтверждён. Отправьте правильный VIN.");};
+$("reset").onclick=()=>{liveVehicle=null;liveVehicleConfirmed=false;confirmed=false;flowRunning=false;selectionState={vin:null,vehicle:null,confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};renderSelectionTree();$("messages").innerHTML="";$("timeline").innerHTML="";$("vin").value="";$("backendState").textContent="READY";$("chatStatus").textContent="● live API mode";message("Отправьте VIN автомобиля из 17 символов. Данные будут запрошены у внешних каталогов.");};
+$("chatStatus").textContent="● live API mode";
+
 </script>
 </body>
 </html>
