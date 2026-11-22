@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import re
+from collections import deque
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 import httpx
@@ -10,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-APP_VERSION = "2.1.2"
+APP_VERSION = "2.1.3"
 SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
 NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
@@ -53,6 +55,20 @@ class LookupRequest(BaseModel):
 
 class MCPError(RuntimeError):
     pass
+
+
+TRACE_EVENTS = deque(maxlen=250)
+
+
+def trace(stage: str, provider: str, status: str, message: str, details: Any = None):
+    TRACE_EVENTS.appendleft({
+        "time": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "provider": provider,
+        "status": status,
+        "message": message,
+        "details": details,
+    })
 
 
 def _mcp_payload(response: httpx.Response) -> dict[str, Any]:
@@ -167,6 +183,11 @@ async def health():
     }
 
 
+@app.get("/api/admin/traces")
+async def admin_traces():
+    return {"events": list(TRACE_EVENTS), "retained": len(TRACE_EVENTS), "retention": "in-memory; cleared on process restart"}
+
+
 @app.get("/api/catalog/v1/providers")
 async def providers():
     return {
@@ -196,6 +217,14 @@ async def decode_vehicle(payload: DecodeRequest):
             results.append(_provider_result(provider, "unavailable", error=str(item)[:300]))
         else:
             results.append(_provider_result(provider, "success", item.get("data")))
+    for provider_result in results:
+        trace(
+            "VIN decode",
+            provider_result["provider"],
+            provider_result["status"],
+            "VIN provider request completed" if provider_result["status"] == "success" else "VIN provider request failed",
+            {"vin": vin, "error": provider_result.get("error")},
+        )
     primary = next((r.get("data") for r in results if r["provider"] == "solocatalog_mcp" and r["status"] == "success"), None)
     if not primary:
         primary = next((r.get("data") for r in results if r["provider"] == "nhtsa_vpic" and r["status"] == "success"), None)
@@ -219,7 +248,10 @@ async def catalogue_lookup(payload: LookupRequest):
     else:
         tool, args = "search_parts", {"vin": payload.vin, "q": payload.q, "query": payload.q, "part_name": payload.q, "lang": payload.lang}
     try:
+        trace("Catalog lookup", "solocatalog_mcp", "started", f"Calling {tool}", {"mode": payload.mode, "vin": payload.vin, "arguments": args})
         result = await solo_call(tool, args)
+        trace("Catalog lookup", "solocatalog_mcp", "success", f"{tool} returned data", {"mode": payload.mode, "vin": payload.vin, "tool": tool, "result": result["data"]})
         return {"status": "success", "mode": payload.mode, "vin": payload.vin, "source": "solocatalog_mcp", "result": result["data"], "is_demo_data": False}
     except Exception as exc:
+        trace("Catalog lookup", "solocatalog_mcp", "error", str(exc)[:300], {"mode": payload.mode, "vin": payload.vin, "tool": tool})
         raise HTTPException(status_code=502, detail={"provider": "solocatalog_mcp", "status": "unavailable", "message": str(exc)[:300]}) from exc
