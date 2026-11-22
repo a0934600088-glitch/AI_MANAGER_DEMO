@@ -41,8 +41,7 @@
   function matchTerms(text){
     const source=norm(text), found=new Map();
     for(const item of index){
-      const re=new RegExp('(^| )'+item.norm.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+'( |$)','i');
-      if(re.test(source)&&!found.has(item.id))found.set(item.id,rows.find(r=>r.id===item.id));
+      if((' '+source+' ').includes(' '+item.norm+' ')&&!found.has(item.id))found.set(item.id,rows.find(r=>r.id===item.id));
     }
     return [...found.values()];
   }
