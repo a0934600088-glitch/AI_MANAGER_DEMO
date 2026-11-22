@@ -1,47 +1,57 @@
-# AI Manager Catalog Adapter (SoloCatalog)
+# AI Manager Catalog API — v2.1.2
 
-This is server-side source code. It is not deployed by GitHub Pages and is not called by the static demo yet.
+FastAPI backend for the live AI Manager test release. Railway serves the customer interface and API from the same origin.
 
-## Requirements
+## Live providers
 
-- Python 3.11+
-- A SoloCatalog API key created in the provider account
-- Provider access within its free-request or paid subscription allowance
+- **SoloCatalog MCP**: `https://solocatalog.com/mcp`, Streamable HTTP. Light use has a small free daily allowance without a key. Higher volume requires a provider API key; do not put it in frontend code or Git.
+- **NHTSA vPIC**: public VIN decoder without a key. It is not an OEM parts catalogue and does not provide parts diagrams.
 
-## Deploy to Railway\n\n1. Connect the Railway service to this GitHub repository.\n2. Railway will use the root `Dockerfile` and `railway.json`.\n3. In the Railway service Variables panel, set `SOLOCATALOG_API_KEY` to the key created in SoloCatalog. Do not commit the key.\n4. Set `CORS_ORIGINS` to `https://a0934600088-glitch.github.io` (plus any trusted local origins needed for development).\n5. Generate a public Railway domain and verify `GET /health`.\n6. Only after the backend is live, configure the frontend API base URL and test the real VIN flow.\n\nRailway deployment still requires the repository to be connected to a Railway account and the provider key to be supplied securely.\n\n## Run locally
+The API calls SoloCatalog and NHTSA in parallel for VIN decoding. Parts search, diagrams and diagram-part requests are sent to SoloCatalog. Provider results and failures remain separate; synthetic fixtures are not a fallback.
+
+## Deploy
+
+The Railway project `AI Manager v2.1.2` is connected to `a0934600088-glitch/AI_MANAGER_DEMO` and builds from the repository root using the root Dockerfile. The service listens on Railway's `PORT` (currently routed to 8080).
+
+- `GET /health` — process health and provider configuration. This does not prove upstream catalogue reachability.
+- `GET /api/catalog/v1/providers` — configured providers and capabilities.
+- `POST /api/catalog/v1/vehicles/decode` — real VIN decode via SoloCatalog MCP + NHTSA.
+- `POST /api/catalog/v1/lookup` — `parts`, `diagrams`, `diagram`, or `models` lookup via SoloCatalog MCP.
+- `GET /docs` — interactive API documentation.
+
+## Request examples
+
+```json
+POST /api/catalog/v1/vehicles/decode
+{"vin":"WVWZZZAUZJP594600","lang":"ru"}
+```
+
+```json
+POST /api/catalog/v1/lookup
+{"mode":"diagrams","vin":"WVWZZZAUZJP594600","lang":"ru"}
+```
+
+```json
+POST /api/catalog/v1/lookup
+{"mode":"parts","vin":"WVWZZZAUZJP594600","q":"front brake pads","lang":"en"}
+```
+
+## Important limits
+
+- A successful health check means only that this FastAPI process is running. Upstream provider reachability is proven only by an actual request.
+- NHTSA VIN data must never be presented as OEM fitment confirmation.
+- A vehicle decode does not guarantee that a diagram exists for that vehicle. The catalogue response must contain the original diagram/image URL and source callouts before the UI labels it as an OEM diagram.
+- No generated or synthetic diagram is used as a fallback.
+- The architecture reserves up to 10 provider slots; only SoloCatalog and NHTSA are currently enabled. RockAuto and Tradesoft are not connected.
+- SoloCatalog coverage varies by make, market and source release. Its light no-key allowance is limited and subject to provider terms/rate limits.
+- Verify commercial display, storage and multi-tenant usage rights before commercial rollout. The provider's terms prohibit automated scraping, bulk extraction and unauthorized reuse.
+
+## Local development
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-Copy `.env.example` to `.env`, set `SOLOCATALOG_API_KEY` in your local environment, then run:
-
-```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-For a quick local setup, export the variables from `.env` using your shell or configure them in your IDE. Do not commit `.env`.
-
-## Adapter endpoints
-
-- `GET /health` — reports whether a provider key is configured; it does not call the provider.
-- `POST /api/catalog/v1/vehicles/decode` — proxies the documented VIN decode operation.
-- `POST /api/catalog/v1/lookup` — proxies the documented quick lookup modes: models, diagrams, diagram parts, and text/part search.
-
-Interactive API documentation is available at `/docs` when the local server is running.
-
-## Security and current limits
-
-- The provider key is read only from the backend environment variable `SOLOCATALOG_API_KEY`.
-- The key is never sent to the browser or returned by `/health`.
-- CORS defaults to local development origins. Set `CORS_ORIGINS` to the exact trusted frontend origins before deployment.
-- The adapter forwards provider JSON without inventing a normalized fitment schema.
-- Provider HTTP errors are converted to controlled API errors; upstream response bodies are not exposed.
-- No provider response is persisted, cached, or bulk-imported.
-- This repository's GitHub Pages workflow publishes static files only. It does not deploy this FastAPI service.
-
-Before production use, confirm commercial display/storage rights, test coverage for target vehicle makes, configure secrets on a real backend host, and add tenant-level quotas, audit logging, retries and integration tests.
+No API key is required for the documented light-use MCP allowance. For higher volume, configure `SOLOCATALOG_API_KEY` server-side and pass it as a Bearer header in the MCP client. Never commit secrets.
