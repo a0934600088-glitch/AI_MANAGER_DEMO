@@ -35,7 +35,7 @@
     {id:'cabin_filter',ru:['салонный фильтр','фильтр салона'],uk:['салонний фільтр','фільтр салону'],en:['cabin filter','pollen filter']},
     {id:'oem_number',ru:['оригинальный номер','номер оригинала','оэ номер','oe номер'],uk:['оригінальний номер','номер оригіналу','oe номер'],en:['oe number','oem number','genuine part number']}
   ];
-  const norm=s=>String(s||'').toLocaleLowerCase().replace(/[ё]/g,'е').replace(/[’']/g,'').replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+  const norm=s=>String(s||'').toLocaleLowerCase().replace(/[ё]/g,'е').replace(/[’']/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   const index=[];
   rows.forEach(row=>['ru','uk','en'].forEach(lang=>(row[lang]||[]).forEach(alias=>index.push({id:row.id,lang,alias,norm:norm(alias)}))));
   function matchTerms(text){
