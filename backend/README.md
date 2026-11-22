@@ -8,7 +8,7 @@ This is server-side source code. It is not deployed by GitHub Pages and is not c
 - A SoloCatalog API key created in the provider account
 - Provider access within its free-request or paid subscription allowance
 
-## Run locally
+## Deploy to Railway\n\n1. Connect the Railway service to this GitHub repository.\n2. Railway will use the root `Dockerfile` and `railway.json`.\n3. In the Railway service Variables panel, set `SOLOCATALOG_API_KEY` to the key created in SoloCatalog. Do not commit the key.\n4. Set `CORS_ORIGINS` to `https://a0934600088-glitch.github.io` (plus any trusted local origins needed for development).\n5. Generate a public Railway domain and verify `GET /health`.\n6. Only after the backend is live, configure the frontend API base URL and test the real VIN flow.\n\nRailway deployment still requires the repository to be connected to a Railway account and the provider key to be supplied securely.\n\n## Run locally
 
 ```bash
 cd backend
