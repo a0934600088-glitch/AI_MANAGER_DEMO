@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1350" viewBox="0 0 2400 1350">
+<defs>
+ <linearGradient id="b" x2="0" y2="1"><stop stop-color="#101c2c"/><stop offset="1" stop-color="#091421"/></linearGradient>
+ <radialGradient id="v" cx="50%" cy="49%" r="72%"><stop stop-color="#071321" stop-opacity=".97"/><stop offset=".63" stop-color="#091624" stop-opacity=".90"/><stop offset="1" stop-color="#0b1929" stop-opacity=".58"/></radialGradient>
+ <pattern id="g" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M44 0H0V44" fill="none" stroke="#9ab4d0" stroke-opacity=".04" stroke-width="1"/></pattern>
+ <g id="gear" fill="none" stroke="#9bb5d0" stroke-width="2.2"><circle r="86"/><circle r="60"/><circle r="18"/><circle r="42" stroke-dasharray="3 10"/><path d="M0-108v22M0 86v22M-108 0h22M86 0h22M-76-76l15 15M61 61l15 15M76-76L61-61M-61 61l-15 15"/></g>
+ <g id="piston" fill="none" stroke="#9bb5d0" stroke-width="2.4" stroke-linejoin="round"><path d="M-48-70h96l-6 16H-42zM-44-48H44v12H-44zM-42-28H42v12H-42zM-36-8H36v78H-36zM-26 70v24h52V70M-17 94v35h34V94M-36 18h72M-36 54h72"/></g>
+ <g id="plug" fill="none" stroke="#9bb5d0" stroke-width="2.3" stroke-linejoin="round"><path d="M-17-66h34v20l-7 13v38l-10 12-10-12v-38l-7-13zM-10-45h20M-9-28h18M-8-12h16M-5 17l-6 28h22l-6-28M-4 45v20M4 45v20"/></g>
+ <g id="bearing" fill="none" stroke="#9bb5d0" stroke-width="2.3"><circle r="75"/><circle r="57"/><circle r="39"/><circle r="17"/><circle r="48" stroke-dasharray="3 11"/></g>
+ <g id="rod" fill="none" stroke="#9bb5d0" stroke-width="2.3"><path d="M-17-66h34l9 18-8 20-10 14v28l10 14 8 20-9 18h-34l-9-18 8-20 10-14v-28l-10-14-8-20z"/><circle cy="-48" r="9"/><circle cy="48" r="9"/></g>
+</defs>
+<rect width="2400" height="1350" fill="url(#b)"/><rect width="2400" height="1350" fill="url(#g)"/>
+<g opacity=".22">
+ <use href="#gear" transform="translate(300 230) scale(1.12)"/>
+ <use href="#plug" transform="translate(2100 205) rotate(20) scale(1.12)"/>
+ <use href="#piston" transform="translate(370 1110) rotate(-18) scale(1.12)"/>
+ <use href="#bearing" transform="translate(2070 1110) scale(1.05)"/>
+ <use href="#rod" transform="translate(1810 690) rotate(24) scale(.65)"/>
+ <use href="#gear" transform="translate(780 1190) scale(.42)"/>
+ <path d="M100 460h130m-65-65v130M2170 470h130m-65-65v130M1010 1180h120m-60-60v120" fill="none" stroke="#9bb5d0" stroke-width="1.5" stroke-dasharray="4 8"/>
+ <circle cx="540" cy="470" r="6" fill="none" stroke="#9bb5d0" stroke-width="2"/><circle cx="1860" cy="450" r="7" fill="none" stroke="#9bb5d0" stroke-width="2"/>
+</g>
+<rect width="2400" height="1350" fill="url(#v)"/>
+</svg>
