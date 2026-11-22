@@ -64,17 +64,38 @@ function showVinCandidate(candidate){
  actions.append(yes,edit);el.append(actions)}
  $('messages').append(el);scrollEnd()
 }
+function vinFromEField(words){
+ const valid=/^[A-HJ-NPR-Z0-9]{17}$/;
+ const clean=w=>String(w?.text||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const box=w=>w?.bbox||{};
+ const markers=(words||[]).filter(w=>clean(w)==='E');
+ for(const marker of markers){
+  const m=box(marker),my=(m.y0+m.y1)/2,mh=Math.max(1,m.y1-m.y0);
+  const candidates=(words||[]).filter(w=>{
+   const b=box(w),txt=clean(w),cy=(b.y0+b.y1)/2;
+   return valid.test(txt)&&b.x0>=m.x1&&Math.abs(cy-my)<=Math.max(14,mh*1.25);
+  }).sort((a,b)=>box(a).x0-box(b).x0);
+  if(candidates.length===1)return clean(candidates[0]);
+ }
+ return null;
+}
 async function readVinFromImage(file){
  if(!window.Tesseract){showVinCandidate(null);add('Модуль распознавания документа не загрузился. Введите VIN вручную.','bot','system');return}
- add('Получено фото документа. Распознаю VIN…','bot');
+ add('Получено фото документа. Ищу VIN только в строке поля E…','bot');
  try{
-  const result=await Tesseract.recognize(file,'eng',{logger:()=>{}});
-  const raw=(result?.data?.text||'').toUpperCase();
-  const compact=raw.replace(/[^A-Z0-9]/g,'');
-  const matches=compact.match(/[A-HJ-NPR-Z0-9]{17}/g)||[];
-  const candidate=matches.find(x=>/^[A-HJ-NPR-Z0-9]{17}$/.test(x))||null;
+  const bitmap=await createImageBitmap(file);
+  let candidate=null;
+  for(const angle of [0,90,180,270]){
+   const swap=angle===90||angle===270,canvas=document.createElement('canvas');
+   canvas.width=swap?bitmap.height:bitmap.width;canvas.height=swap?bitmap.width:bitmap.height;
+   const ctx=canvas.getContext('2d');ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(angle*Math.PI/180);ctx.drawImage(bitmap,-bitmap.width/2,-bitmap.height/2);
+   const result=await Tesseract.recognize(canvas,'eng',{logger:()=>{},tessedit_pageseg_mode:6,preserve_interword_spaces:'1'});
+   candidate=vinFromEField(result?.data?.words);
+   if(candidate)break;
+  }
+  bitmap.close?.();
   if(candidate)showVinCandidate(candidate);
-  else{showVinCandidate(null);const hint=document.createElement('div');hint.className='msg';hint.textContent='Фото получено, но VIN не удалось выделить с достаточной уверенностью. Попробуйте сфотографировать строку VIN крупнее, без бликов, или введите номер вручную.';$('messages').append(hint);scrollEnd()}
+  else{showVinCandidate(null);const hint=document.createElement('div');hint.className='msg';hint.textContent='Не удалось однозначно прочитать VIN именно напротив поля E. Никакие символы из других строк не объединялись. Сфотографируйте поле E крупнее или введите VIN вручную.';$('messages').append(hint);scrollEnd()}
  }catch(e){showVinCandidate(null);add('Не удалось обработать фотографию. Попробуйте ещё раз или введите VIN вручную.','bot','system')}
 }
 function setBusy(v){busy=v;$('send').disabled=v;$('chatState').textContent=v?'· запрос выполняется':'· готов'}
