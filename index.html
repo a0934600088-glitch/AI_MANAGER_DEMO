@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#101827">
-<title>AI Manager — Demo v2.0</title>
+<title>AI Manager — Demo v2.1</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d2d;--panel2:#18263a;--line:#2a3b52;--text:#edf4fc;--muted:#9aabc0;--blue:#69a9ff;--green:#51d5a0;--amber:#f1c36d;--red:#f08080}
 *{box-sizing:border-box}body{margin:0;background:#0b1220;color:var(--text);font:14px/1.45 Inter,system-ui,Segoe UI,Arial,sans-serif}
@@ -12,7 +12,7 @@ header{height:64px;display:flex;align-items:center;justify-content:space-between
 .brand{font-weight:850;letter-spacing:.5px;font-size:17px}.brand b{color:var(--blue)}.version{font-size:11px;color:var(--green);border:1px solid #28634f;padding:4px 9px;border-radius:20px;margin-left:8px}
 .demo{font-size:11px;color:var(--amber);border:1px solid #6a5430;padding:6px 10px;border-radius:8px;background:#302719}
 main{max-width:1800px;margin:auto;padding:18px}.intro{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px;gap:12px}.intro h1{font-size:20px;margin:0}.intro p{margin:3px 0 0;color:var(--muted);font-size:12px}
-.workspace{display:grid;grid-template-columns:minmax(275px, .88fr) minmax(360px,1.12fr) minmax(360px,1.12fr);gap:13px;align-items:stretch}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;align-items:stretch}.workspace>.panel:first-child{display:none}.chat-panel{order:1;min-height:620px}.workspace>.panel:nth-child(2){order:2;min-height:420px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;min-width:0;overflow:hidden;display:flex;flex-direction:column;min-height:calc(100vh - 145px)}
 .panel-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px;background:#142033}
 .panel-head h2{font-size:13px;margin:0;font-weight:750}.sub{color:var(--muted);font-size:10px}.panel-body{padding:14px;overflow:auto;flex:1}
@@ -26,7 +26,7 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 .chat-tools{display:flex;gap:6px;padding:8px 10px 0;background:#142234}.chat-tools button{font-size:10px;padding:8px 10px;background:#263a52;color:#e7f0fa;border:1px solid #405773;border-radius:8px}.chat-tools button.recording{background:#633333;border-color:#a95656}.chat-tools button.manager-cta{background:#176b57;color:#f1fff9;border:1px solid #36a887;font-weight:800}.chat-tools button.manager-cta:hover{background:#20856b}.chat-tools .tool-hint{font-size:9px;color:var(--muted);align-self:center}.chat-compose{padding:8px 10px 10px;border-top:0;background:#142234;display:flex;gap:8px;align-items:end}.chat-compose textarea{resize:none;min-height:40px;max-height:100px;font-size:11px}.chat-compose button{height:40px}.chat-attachment{display:block;max-width:230px;margin-top:5px;border:1px solid #40536c;border-radius:8px;padding:7px;background:#16283b;font-size:10px;overflow-wrap:anywhere}.chat-attachment img{display:block;max-width:100%;max-height:170px;object-fit:contain;border-radius:5px;margin-bottom:5px}.offer{border:1px solid #456a62;background:#102b2a;padding:10px;border-radius:9px;margin-top:7px}.offer strong{font-size:12px}.offer .price{font-size:18px;font-weight:850;color:#76e0b5}.offer small{color:#a9c6bd;font-size:9px}.typing{color:var(--muted);font-size:10px;font-style:italic}
 .footer{font-size:10px;color:#71839b;text-align:center;padding:13px}
 @keyframes appear{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-@media(max-width:1120px){.workspace{grid-template-columns:minmax(260px,.9fr) minmax(330px,1.1fr)}.chat-panel{grid-column:1/-1;min-height:620px}.chat-messages{min-height:420px}}
+@media(max-width:1120px){.workspace{grid-template-columns:minmax(0,1fr)}.chat-panel{grid-column:auto;min-height:620px}.chat-messages{min-height:420px}}
 @media(max-width:720px){main{padding:10px}.workspace{grid-template-columns:1fr}.panel{min-height:auto}.chat-panel{grid-column:auto;min-height:650px}.panel-body{max-height:none}.chat-messages{min-height:450px}header{padding:0 12px}.demo{font-size:9px}.intro{align-items:flex-start;flex-direction:column}}
 
 .diagram-card{margin-top:8px;border:1px solid #38536d;background:#101f30;border-radius:11px;padding:10px}
@@ -52,9 +52,9 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </style>
 </head>
 <body>
-<header><div class="brand">AI <b>MANAGER</b><span class="version">DEMO v2.0</span></div><div class="demo">DEMONSTRATION DATA · NO LIVE CATALOG</div></header>
+<header><div class="brand">AI <b>MANAGER</b><span class="version">DEMO v2.1</span></div><div class="demo">DEMONSTRATION DATA · NO LIVE CATALOG</div></header>
 <main>
-<div class="intro"><div><h1>Подбор автозапчастей — рабочий сценарий</h1><p>VIN → подтверждение автомобиля → запрос детали → каталог → OEM → аналоги → предложение</p></div><button class="ghost" id="reset">Перезапустить демо</button></div>
+<div class="intro"><div><h1>AI Manager — клиентский чат и журнал backend</h1><p>Клиентский мессенджер расположен сверху. Технический журнал выполнения — ниже и доступен только в служебном режиме.</p></div><button class="ghost" id="reset">Перезапустить демо</button></div>
 <div class="workspace">
 <section class="panel">
 <div class="panel-head"><h2>01 · АВТОМОБИЛЬ И ВХОДНЫЕ ДАННЫЕ</h2><span class="sub">VIN / FILES</span></div>
@@ -84,10 +84,10 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
   vehicle: WAITING_FOR_VIN,
   request: WAITING_FOR_CUSTOMER,
   catalog: NOT_QUERIED
-}</pre><div class="tree-foot">Обновляется при каждом шаге сценария. Значения помечены как DEMO, пока нет реального каталога.</div></div><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v2.0</div></div></div></div></div>
+}</pre><div class="tree-foot">Обновляется при каждом шаге сценария. Значения помечены как DEMO, пока нет реального каталога.</div></div><div class="timeline" id="timeline"><div class="event"><div class="event-icon">●</div><div><strong>Демонстрационный backend готов</strong><p>Ожидание подтверждения VIN и запроса клиента.</p><div class="source">Источник: локальный сценарий AI_MANAGER_DEMO v2.1</div></div></div></div></div>
 </section>
 <section class="panel chat-panel">
-<div class="panel-head"><h2>03 · КЛИЕНТСКИЙ МЕССЕНДЖЕР</h2><span class="sub">CHAT UI</span></div>
+<div class="panel-head"><h2>01 · КЛИЕНТСКИЙ МЕССЕНДЖЕР</h2><span class="sub">CHAT UI</span></div>
 <div class="chat">
 <div class="chat-top"><div class="avatar">AI</div><div><strong>Parts Assistant</strong><small id="chatStatus">● демонстрационный режим</small></div></div>
 <div class="chat-messages" id="messages">
@@ -106,10 +106,13 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}input,te
 </div>
 </section>
 </div>
-<div class="footer">AI_MANAGER_DEMO v2.0 · Схемы, позиции, OEM, аналоги, цены и проверки совместимости — синтетические демонстрационные данные. Внешние API и реальные заказы не используются.</div>
+<div class="footer">AI_MANAGER_DEMO v2.1 · Схемы, позиции, OEM, аналоги, цены и проверки совместимости — синтетические демонстрационные данные. Внешние API и реальные заказы не используются.</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
+// Customer-only presentation: /?view=customer hides internal backend diagnostics.
+const customerOnly=new URLSearchParams(location.search).get('view')==='customer';
+if(customerOnly){document.body.classList.add('customer-only');const style=document.createElement('style');style.textContent='.customer-only .workspace>.panel:nth-child(2),.customer-only .intro p,.customer-only #reset{display:none!important}.customer-only .workspace{grid-template-columns:1fr}.customer-only .chat-panel{min-height:calc(100vh - 100px)}.customer-only .panel-head{display:none}.customer-only header .demo{display:none}';document.head.append(style);}
 let confirmed=false, flowRunning=false, recorder=null, chunks=[];
 let selectionState={vin:null,vehicle:null,confirmed:false,request:null,nodes:[],diagrams:[],selected:[],resolved:[]};
 function renderSelectionTree(){
