@@ -11,8 +11,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from app.language import translate_texts, language_catalog
 
-APP_VERSION = "2.1.4"
+APP_VERSION = "2.2.0"
 SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
 NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
@@ -50,7 +51,14 @@ class LookupRequest(BaseModel):
     model: str | None = Field(default=None, max_length=200)
     diagram: str | None = Field(default=None, max_length=200)
     q: str | None = Field(default=None, max_length=80)
-    lang: Literal["en", "az", "ru"] = "ru"
+    lang: Literal["en", "uk", "az", "ru"] = "ru"
+
+
+class TranslationRequest(BaseModel):
+    texts: list[str] = Field(min_length=1, max_length=30)
+    source: str = Field(default="auto", min_length=2, max_length=8)
+    target: str = Field(min_length=2, max_length=8)
+    domain: Literal["general", "automotive"] = "general"
 
 
 class MCPError(RuntimeError):
@@ -175,12 +183,42 @@ async def health():
         "status": "ok",
         "version": APP_VERSION,
         "providers": [
+            {"id": "argos_translate", "type": "translation", "auth": "open-source self-hosted models", "enabled": True},
             {"id": "solocatalog_mcp", "type": "parts_catalog", "auth": "no-key light-use allowance", "enabled": True},
             {"id": "nhtsa_vpic", "type": "vin_decoder", "auth": "public", "enabled": True},
         ],
         "provider_limit_per_tenant": 10,
         "note": "Health confirms this adapter is running; provider reachability is tested on actual requests.",
     }
+
+
+@app.get("/api/language/v1/languages")
+async def language_languages():
+    return await asyncio.to_thread(language_catalog)
+
+
+@app.post("/api/language/v1/translate")
+async def language_translate(payload: TranslationRequest):
+    try:
+        translations = await asyncio.to_thread(
+            translate_texts, payload.texts, payload.source.lower(),
+            payload.target.lower(), payload.domain
+        )
+        return {
+            "status": "success", "engine": "argos_translate",
+            "domain": payload.domain, "source": payload.source.lower(),
+            "target": payload.target.lower(), "translations": translations,
+            "note": "Open-source general translation with protected automotive terminology and identifiers."
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        trace("Language translation", "argos_translate", "unavailable", str(exc)[:300],
+              {"target": payload.target, "domain": payload.domain})
+        raise HTTPException(status_code=503, detail={
+            "provider": "argos_translate", "status": "unavailable",
+            "message": "Translation model is not available yet. Retry after model initialization."
+        }) from exc
 
 
 @app.get("/api/admin/traces")
