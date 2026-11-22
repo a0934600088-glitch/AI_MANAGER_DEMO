@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-APP_VERSION = "2.1.3"
+APP_VERSION = "2.1.4"
 SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
 NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
@@ -40,7 +40,7 @@ app.add_middleware(
 
 class DecodeRequest(BaseModel):
     vin: str = Field(min_length=5, max_length=40)
-    lang: Literal["en", "az", "ru"] = "ru"
+    lang: Literal["en", "uk", "az", "ru"] = "ru"
 
 
 class LookupRequest(BaseModel):
