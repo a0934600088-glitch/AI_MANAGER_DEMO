@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1600" viewBox="0 0 2560 1600">
+<defs>
+ <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#111d2d"/><stop offset=".52" stop-color="#0b1929"/><stop offset="1" stop-color="#071321"/></linearGradient>
+ <radialGradient id="blue" cx="51%" cy="54%" r="66%"><stop stop-color="#0875d8" stop-opacity=".86"/><stop offset=".32" stop-color="#0756a5" stop-opacity=".62"/><stop offset=".72" stop-color="#0a315b" stop-opacity=".28"/><stop offset="1" stop-color="#071321" stop-opacity="0"/></radialGradient>
+ <radialGradient id="shade" cx="50%" cy="48%" r="70%"><stop offset="0" stop-color="#061322" stop-opacity=".28"/><stop offset=".68" stop-color="#071321" stop-opacity=".12"/><stop offset="1" stop-color="#06101d" stop-opacity=".52"/></radialGradient>
+ <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse"><path d="M64 0H0V64" fill="none" stroke="#9ec8ec" stroke-opacity=".075" stroke-width="1"/></pattern>
+ <g id="gear" fill="none" stroke="#65b8ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><circle r="132"/><circle r="104"/><circle r="77" stroke-dasharray="5 13"/><circle r="25"/><path d="M0-158v25M0 133v25M-158 0h25M133 0h25M-112-112l18 18M94 94l18 18M112-112l-18 18M-94 94l-18 18M-60-146l9 24M60 146l-9-24M146 60l-24-9M-146-60l24 9"/></g>
+ <g id="piston" fill="none" stroke="#65b8ff" stroke-width="3.4" stroke-linejoin="round"><path d="M-88-122h176l-12 27H-76zM-78-84H78v20H-78zM-74-52H74v20H-74zM-66-18H66v135H-66zM-47 117v42h94v-42M-30 159v58h60v-58M-66 18h132M-66 76h132"/></g>
+ <g id="plug" fill="none" stroke="#65b8ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M-32-120h64v39l-14 21v65l-18 22-18-22v-65l-14-21zM-19-80h38M-17-53h34M-15-26h30M-10 31l-12 55h44L10 31M-8 86v36M8 86v36"/></g>
+ <g id="bearing" fill="none" stroke="#65b8ff" stroke-width="3.2"><circle r="132"/><circle r="106"/><circle r="78"/><circle r="43"/><circle r="22"/><circle r="91" stroke-dasharray="4 16"/><path d="M0-122v-14M0 122v14M-122 0h-14M122 0h14M-86-86l-10-10M86 86l10 10M86-86l10-10M-86 86l-10 10"/></g>
+ <g id="rod" fill="none" stroke="#65b8ff" stroke-width="3.2" stroke-linejoin="round"><path d="M-32-114h64l17 31-16 36-19 24v48l19 24 16 36-17 31h-64l-17-31 16-36 19-24v-48l-19-24-16-36z"/><circle cy="-82" r="17"/><circle cy="82" r="17"/><path d="M-13-53h26v106h-26z"/></g>
+ <g id="spring" fill="none" stroke="#65b8ff" stroke-width="3.2" stroke-linejoin="round"><path d="M-42-132h84l-34 26 34 26-68 26 68 26-68 26 68 26-68 26 34 26h-84"/></g>
+</defs>
+<rect width="2560" height="1600" fill="url(#base)"/><rect width="2560" height="1600" fill="url(#grid)"/><rect width="2560" height="1600" fill="url(#blue)"/>
+<g opacity=".68">
+ <use href="#gear" transform="translate(170 235) scale(1.24)"/>
+ <use href="#piston" transform="translate(420 1330) rotate(-17) scale(1.18)"/>
+ <use href="#spring" transform="translate(780 230) rotate(15) scale(.92)"/>
+ <use href="#plug" transform="translate(2290 250) rotate(23) scale(1.1)"/>
+ <use href="#bearing" transform="translate(2310 1290) scale(1.13)"/>
+ <use href="#rod" transform="translate(1940 220) rotate(20) scale(.78)"/>
+ <use href="#gear" transform="translate(2140 770) scale(.55)"/>
+ <use href="#piston" transform="translate(112 850) rotate(12) scale(.55)"/>
+ <path d="M110 540h210m-105-105v210M2200 540h220m-110-110v220M2050 1060h260m-130-130v260M520 390h150m-75-75v150" fill="none" stroke="#65b8ff" stroke-width="2" stroke-dasharray="8 12" opacity=".7"/>
+ <circle cx="530" cy="580" r="13" fill="none" stroke="#65b8ff" stroke-width="2"/><circle cx="2010" cy="520" r="12" fill="none" stroke="#65b8ff" stroke-width="2"/><circle cx="1740" cy="1350" r="10" fill="none" stroke="#65b8ff" stroke-width="2"/>
+</g>
+<rect width="2560" height="1600" fill="url(#shade)"/>
+</svg>
