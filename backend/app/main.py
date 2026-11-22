@@ -18,7 +18,7 @@ app = FastAPI(
 
 allowed_origins = [
     item.strip()
-    for item in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    for item in os.getenv("CORS_ORIGINS", "https://a0934600088-glitch.github.io,http://localhost:3000,http://127.0.0.1:3000").split(",")
     if item.strip()
 ]
 app.add_middleware(
