@@ -164,7 +164,7 @@ async function send(){if(busy)return;const v=$('input').value.trim();if(!v&&!fil
 function resizeInput(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,150)+'px'}
 $('input').addEventListener('input',()=>{const text=$('input').value.trim();if(text)autoSetLanguage(text);resizeInput();syncComposer()});$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});$('send').onclick=send;function syncComposer(){const hasText=$('input').value.trim().length>0;const hasAttachment=files.length>0;const showSend=hasText||hasAttachment;$('send').classList.toggle('hidden',!showSend);$('voiceBtn').classList.toggle('hidden',showSend);$('voiceBtn').title=recognitionActive?'Остановить диктовку':'Надиктовать текст'}syncComposer();
 $('cameraBtn').onclick=()=>$('cameraInput').click();$('attachBtn').onclick=()=>$('fileInput').click();$('fileInput').onchange=e=>{const selected=[...e.target.files];addFiles(selected);selected.filter(f=>f.type.startsWith('image/')).forEach(readVinFromImage);e.target.value=''};$('cameraInput').onchange=e=>{const selected=[...e.target.files];e.target.value='';selected.filter(f=>f.type.startsWith('image/')).forEach(sendCapturedPhoto)};
-let voiceMeterStream=null,voiceMeterContext=null,voiceMeterAnalyser=null,voiceMeterFrame=0,voiceMeterData=null,voiceMeterLevel=0;
+let voiceMeterStream=null,voiceMeterContext=null,voiceMeterAnalyser=null,voiceMeterFrame=0,voiceMeterData=null,voiceMeterLevel=0,voiceMeterGeneration=0;
 function drawVoiceMeter(flat=false){
  const canvas=$('voiceMeterCanvas');if(!canvas)return;
  const ctx=canvas.getContext('2d');if(!ctx)return;
@@ -187,12 +187,15 @@ function drawVoiceMeter(flat=false){
  if(!flat&&voiceMeterStream)voiceMeterFrame=requestAnimationFrame(()=>drawVoiceMeter(false));
 }
 async function startVoiceMeter(){
+ const generation=++voiceMeterGeneration;
  const meter=$('voiceMeter');if(!meter)return;
  meter.classList.add('active');meter.setAttribute('aria-hidden','false');
  drawVoiceMeter(true);
  if(!navigator.mediaDevices?.getUserMedia)return;
  try{
-  voiceMeterStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  if(generation!==voiceMeterGeneration||!recognitionShouldRun){stream.getTracks().forEach(track=>track.stop());return}
+  voiceMeterStream=stream;
   const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)throw new Error('AudioContext unavailable');
   voiceMeterContext=new AudioCtx();if(voiceMeterContext.state==='suspended')await voiceMeterContext.resume();
   voiceMeterAnalyser=voiceMeterContext.createAnalyser();voiceMeterAnalyser.fftSize=256;voiceMeterAnalyser.smoothingTimeConstant=.72;
@@ -207,6 +210,7 @@ async function startVoiceMeter(){
  }
 }
 function stopVoiceMeter(){
+ voiceMeterGeneration++;
  if(voiceMeterFrame){cancelAnimationFrame(voiceMeterFrame);voiceMeterFrame=0}
  if(voiceMeterStream){voiceMeterStream.getTracks().forEach(track=>track.stop());voiceMeterStream=null}
  if(voiceMeterContext){voiceMeterContext.close().catch(()=>{});voiceMeterContext=null}
