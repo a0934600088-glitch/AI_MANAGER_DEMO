@@ -1,4 +1,4 @@
-# Automotive Language Engine — v1.1 (demo 2.3.9 / API 2.1.4)
+# Automotive Language Engine — v1.2 (demo 2.4.0 / API 2.2.0)
 
 This module provides deterministic RU/UK/EN automotive terminology matching for the AI Manager demo.
 
@@ -33,3 +33,15 @@ The browser module is automotive-language.js. It is loaded by index.html and exp
 
 ## Extension
 Add entries to rows in automotive-language.js. Every entry must have a stable id and aliases for all supported languages where known. Keep OE/OEM codes out of alias rewriting.
+
+
+## Open translation layer — v1.2
+- Added self-hosted Argos Translate integration in `backend/app/language.py`.
+- Added `GET /api/language/v1/languages` and batch `POST /api/language/v1/translate`.
+- Supports general conversational translation and an automotive mode with a curated technical glossary.
+- Automotive mode protects VINs, common OE/OEM-style references, alphanumeric part identifiers, engine codes and engineering measurements. Recognized workshop terms are mapped to target-language equivalents before generic translation.
+- Required Argos language models are downloaded lazily on the first translation request. The default cache is ephemeral; model packages may need to be downloaded again after a container rebuild.
+- The frontend translates decoded vehicle text fields and catalog result fields into the detected client language. If translation is unavailable, original provider text is shown unchanged.
+- Core chat UI languages remain Russian, Ukrainian and English. The translation endpoint reports additional languages found in the Argos package index; those languages are not automatically enabled as chat UI languages.
+- This is a general-purpose open translation model strengthened by a curated automotive glossary, not a custom-trained automotive neural model.
+- Open-source software and model weights do not make hosting free: CPU, RAM, network and persistent storage remain infrastructure costs.
