@@ -1,4 +1,4 @@
-# Automotive Language Engine — v1.0
+# Automotive Language Engine — v1.1 (demo 2.3.9 / API 2.1.4)
 
 This module provides deterministic RU/UK/EN automotive terminology matching for the AI Manager demo.
 
@@ -29,7 +29,7 @@ Customer: “Нужна наружная граната слева”.
 - The system must still verify vehicle fitment and exact side/variant in the OE catalog.
 
 ## Current demo integration
-The browser module is automotive-language.js. It is loaded by index.html and expands recognized catalog query terms in RU/UK/EN. The existing API receives the detected lang field. The currently deployed Railway API has not been verified to implement server-side neural translation, so this version does not claim that arbitrary catalog text or generated replies are translated automatically.
+The browser module is automotive-language.js. It is loaded by index.html and expands recognized catalog query terms in RU/UK/EN. The API now accepts `en`, `uk`, `az`, and `ru` and forwards the detected language to the connected catalog provider. Fixed interface messages and vehicle-field labels are localized in the browser. Catalog text is localized only to the extent that the provider honors its `lang` argument; no general-purpose translation service is configured in this demo. Browser Web Speech recognition still requires one recognition locale at session start. The demo starts with the browser locale; recognized text then updates the language used for API requests and subsequent dictation sessions. This is not equivalent to true multilingual audio-language detection. Reliable detection of arbitrary spoken languages requires a server-side multilingual speech-to-text service.
 
 ## Extension
 Add entries to rows in automotive-language.js. Every entry must have a stable id and aliases for all supported languages where known. Keep OE/OEM codes out of alias rewriting.
