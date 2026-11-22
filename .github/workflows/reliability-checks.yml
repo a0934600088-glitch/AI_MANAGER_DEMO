@@ -1,0 +1,42 @@
+name: Code reliability checks
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Compile Python backend
+        run: python -m compileall -q backend/app
+      - name: Validate frontend JavaScript syntax
+        run: |
+          node --input-type=commonjs -e "
+          const fs=require('fs');
+          const html=fs.readFileSync('index.html','utf8');
+          const scripts=[...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
+          if (!scripts.length) throw new Error('No inline scripts found');
+          for (const script of scripts) new Function(script);
+          console.log('Validated '+scripts.length+' inline script(s)');
+          "
+      - name: Validate JSON configuration
+        run: |
+          python - <<'PY'
+          import json
+          for path in ("railway.json",):
+              with open(path, encoding="utf-8") as f:
+                  json.load(f)
+          print("JSON configuration valid")
+          PY
+      - name: Build backend container
+        run: docker build -t ai-manager-audit .
