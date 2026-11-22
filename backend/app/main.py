@@ -117,7 +117,9 @@ async def solo_call(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]
             },
         })
         if init.get("error"):
-            raise MCPError(str(init["error"]))
+            raise MCPError(_mcp_error_text([init["error"]]))
+        if not init.get("result", {}).get("protocolVersion"):
+            raise MCPError("SoloCatalog MCP initialization response did not confirm a protocol version")
         await mcp_request(client, {
             "jsonrpc": "2.0", "method": "notifications/initialized", "params": {}
         }, session_id)
@@ -125,8 +127,10 @@ async def solo_call(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
         }, session_id)
         if listed.get("error"):
-            raise MCPError(str(listed["error"]))
+            raise MCPError(_mcp_error_text([listed["error"]]))
         tools = listed.get("result", {}).get("tools", [])
+        if not isinstance(tools, list):
+            raise MCPError("SoloCatalog MCP tools/list returned an invalid tools collection")
         tool = next((t for t in tools if t.get("name") == tool_name), None)
         if not tool:
             raise MCPError(f"SoloCatalog MCP tool '{tool_name}' is not available")
@@ -142,11 +146,47 @@ async def solo_call(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]
             "params": {"name": tool_name, "arguments": safe_args},
         }, session_id)
         if called.get("error"):
-            raise MCPError(str(called["error"]))
+            raise MCPError(_mcp_error_text([called["error"]]))
         result = called.get("result", {})
         if result.get("isError"):
-            raise MCPError(json.dumps(result.get("content", []), ensure_ascii=False))
-        return {"tool": tool_name, "data": result, "provider": "solocatalog_mcp"}
+            raise MCPError(_mcp_error_text(result.get("content", [])))
+        data = _normalise_mcp_result(result)
+        if data in (None, {}, [], ""):
+            raise MCPError(f"SoloCatalog tool '{tool_name}' returned an empty result")
+        return {"tool": tool_name, "data": data, "provider": "solocatalog_mcp"}
+
+
+def _mcp_error_text(content: Any) -> str:
+    if isinstance(content, list):
+        parts = [str(item.get("text", "")) for item in content if isinstance(item, dict) and item.get("text")]
+        if parts:
+            return " | ".join(parts)[:1000]
+    return json.dumps(content, ensure_ascii=False)[:1000]
+
+
+def _normalise_mcp_result(result: dict[str, Any]) -> Any:
+    """Prefer structured MCP data; parse JSON text blocks when a server only emits text."""
+    structured = result.get("structuredContent")
+    if structured is not None:
+        return structured
+    content = result.get("content")
+    if isinstance(content, list):
+        parsed = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text_value = item.get("text")
+            if not isinstance(text_value, str):
+                continue
+            try:
+                parsed.append(json.loads(text_value))
+            except ValueError:
+                parsed.append({"text": text_value})
+        if len(parsed) == 1:
+            return parsed[0]
+        if parsed:
+            return parsed
+    return result
 
 
 async def nhtsa_decode(vin: str) -> dict[str, Any]:
