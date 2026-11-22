@@ -14,7 +14,7 @@ APP_VERSION = "2.1.2"
 SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
 NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 app = FastAPI(
     title="AI Manager Catalog API",
