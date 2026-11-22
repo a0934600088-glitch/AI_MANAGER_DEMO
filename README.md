@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO v2.0
+# AI_MANAGER_DEMO v2.1.1
 
 Static browser prototype for the AI Manager automotive-parts sales workflow.
 
@@ -6,7 +6,7 @@ Static browser prototype for the AI Manager automotive-parts sales workflow.
 
 https://a0934600088-glitch.github.io/AI_MANAGER_DEMO/
 
-## Included in v2.0
+## Included in v2.1.1\n\n- Added a FastAPI SoloCatalog adapter under `backend/`, with server-only Bearer authentication via `SOLOCATALOG_API_KEY`, VIN decode and documented quick-lookup proxy routes.\n- Added `.env.example`, backend setup instructions, and `docs/SOLOCATALOG_ADAPTER.md`.\n- The backend panel identifies the adapter source as present but the server runtime as not deployed. GitHub Pages remains a static frontend and makes no live catalogue requests.\n\n## Included in v2.1\n\n- Customer messenger is displayed above the backend journal. The customer-only URL hides internal diagnostics.
 
 - Backend panel now displays a live, code-style selection hierarchy: VIN → confirmed vehicle → requested node/system → diagram → selected callouts → catalog item → OE reference → analogues. It updates as the customer progresses through the demo. All catalog identifiers remain explicitly marked as local synthetic fixtures.
 
@@ -39,7 +39,7 @@ The module is a first-class capability in the planned **Catalog & Fitment** doma
 
 ## Strict demo boundaries
 
-This repository contains a static frontend only. The v2.0 and v1.9 workflows are client-side simulations, not a live backend integration.
+GitHub Pages still serves a static frontend only. v2.1.1 adds backend source code for a FastAPI SoloCatalog adapter, but the API service has not been deployed and the frontend does not call it. The v2.0, v2.1 and v1.9 workflows remain client-side simulations, not a live backend integration.
 
 - The Volkswagen VIN card is a fixed demonstration fixture. No VIN decoder or Parts-Catalogs request is made.
 - Catalog search, OEM mapping, analogues, fitment status, and offer price are synthetic demonstration records.
@@ -47,7 +47,7 @@ This repository contains a static frontend only. The v2.0 and v1.9 workflows are
 - The journal labels mock sources explicitly. “Demo flow passed” does not mean real compatibility was established.
 - Messenger attachments and photos are displayed locally in the chat; left-panel files and recorded audio remain in the browser. No upload endpoint exists. Voice dictation uses the browser Speech Recognition API where available; recognized text is inserted into the message field for review and manual sending.
 - No live inventory, supplier pricing, order creation, checkout, or payment is available.
-- No API keys or credentials are embedded in the frontend.
+- No API keys or credentials are embedded in the frontend. The adapter reads `SOLOCATALOG_API_KEY` only from the backend environment.\n- The adapter source is not a running service. It must be deployed separately, with secrets configured on the host, before any live catalogue request can succeed.
 - Do not use the displayed part numbers, prices, or fitment statements to purchase parts.
 
 ## Run locally
