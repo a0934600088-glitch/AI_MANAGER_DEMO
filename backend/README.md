@@ -1,4 +1,4 @@
-# AI Manager Catalog API — v2.1.2
+# AI Manager Catalog API — v2.2.0
 
 FastAPI backend for the live AI Manager test release. Railway serves the customer interface and API from the same origin.
 
@@ -55,3 +55,11 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 No API key is required for the documented light-use MCP allowance. For higher volume, configure `SOLOCATALOG_API_KEY` server-side and pass it as a Bearer header in the MCP client. Never commit secrets.
+
+
+## Language and translation
+- `GET /api/language/v1/languages` — core UI languages and languages available in the Argos model index.
+- `POST /api/language/v1/translate` — batch translation using `source`, `target`, and `domain` (`general` or `automotive`).
+- Uses self-hosted open-source Argos Translate models. Models download on first use and are cached in the container.
+- Automotive mode protects VINs, OE/OEM-style references, part identifiers, engine/gearbox codes and measurements; common workshop terms are normalized through the automotive glossary.
+- No public third-party translation endpoint receives customer text. Runtime hosting and compute are still infrastructure costs.
