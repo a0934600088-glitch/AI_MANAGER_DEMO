@@ -39,9 +39,14 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 422)
         record.assert_not_called()
 
-    def test_chat_event_is_persisted_without_raw_message(self):
+    def test_metadata_filter_removes_raw_chat_content_and_identifiers(self):
+        metadata = {"length": 22, "message": "private text", "vin": "WVWZZZAUZJP594600",
+                    "phone": "+380000000000", "language": "uk"}
+        self.assertEqual(analytics._clean_metadata(metadata), {"length": 22, "language": "uk"})
+
+    def test_chat_event_is_persisted_with_session_id(self):
         payload = main.AnalyticsEventRequest(event_type="chat_message", conversation_id="session-test",
-                                             metadata={"length": 22, "message": "private text", "language": "uk"})
+                                             metadata={"length": 22, "language": "uk"})
         with patch("app.main.analytics.record_event") as record:
             result = asyncio.run(main.analytics_event(payload))
         self.assertEqual(result, {"status": "recorded"})
