@@ -1,6 +1,8 @@
-# AI Manager Catalog API — v2.4.10
+# AI Manager Catalog API
 
-FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
+The release version has one canonical source: `backend/VERSION`. The backend reads it at startup and returns it from `GET /health`. Frontend pages display that backend version; do not maintain separate frontend/backend version constants.
+
+FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. Provider credentials remain server-side.
 
 ## Active provider
 
@@ -25,69 +27,36 @@ The backend preserves the provider's `catalogId`, `carId` and `criteria` values.
 
 ## API routes
 
-- `GET /health` — backend process health and active provider state; does not prove upstream reachability.
+- `GET /health` — backend process health, canonical release version and active provider state; does not prove upstream reachability.
 - `GET /api/catalog/v1/providers` — active TradeSoft provider and nine reserved slots.
 - `POST /api/catalog/v1/vehicles/decode` — real TradeSoft VIN decode.
-- `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests. For `parts`, send `group_id` after selecting a group to retrieve OE part numbers and diagram callouts; without `group_id`, `q` searches schemas by part name.
-- `GET /api/admin/traces` — recent provider request trace; requires the `X-Admin-Token` header and a server-side `ADMIN_API_TOKEN`.
+- `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests.
+- `GET /api/admin/traces` — recent provider request trace; requires administrator HTTP Basic authentication.
+- `GET /api/admin/analytics?days=7|30|90` — analytics aggregates; requires administrator HTTP Basic authentication.
+- `GET /api/admin/conversations?days=7|30|90` — per-conversation activity; requires administrator HTTP Basic authentication.
+- `POST /api/analytics/events` — customer-chat lifecycle and message events.
 - `GET /docs` — interactive API documentation.
-
-## Request examples
-
-```json
-POST /api/catalog/v1/vehicles/decode
-{"vin":"WVWZZZAUZJP594600","lang":"ru"}
-```
-
-```json
-POST /api/catalog/v1/lookup
-{"mode":"groups","vin":"WVWZZZAUZJP594600","lang":"ru"}
-```
-
-```json
-POST /api/catalog/v1/lookup
-{"mode":"diagrams","vin":"WVWZZZAUZJP594600","lang":"ru"}
-```
-
-```json
-POST /api/catalog/v1/lookup
-{"mode":"parts","vin":"WVWZZZAUZJP594600","q":"brake pads","lang":"en"}
-```
-
-```json
-POST /api/catalog/v1/lookup
-{"mode":"parts","vin":"WVWZZZAUZJP594600","group_id":"<selected-group-id>","lang":"ru"}
-```
 
 ## Environment
 
-- `TRADESOFT_API_TOKEN` — required API key, set only in Railway service variables.
+- `TRADESOFT_API_TOKEN` — TradeSoft upstream API key, set only in Railway/backend service variables. Do not remove unless TradeSoft confirms that this account can authenticate without a key.
 - `TRADESOFT_ENABLED=true` — enables the primary OEM provider.
 - `CATALOG_TIMEOUT_SECONDS=25` — upstream timeout.
-- `CORS_ORIGINS` — allowed browser origins.
+- `CORS_ORIGINS` — exact allowed browser origins.
+- `ADMIN_USERNAME` — administrator login.
+- `ADMIN_PASSWORD` — administrator password.
+- `DATABASE_URL` — PostgreSQL connection string for persistent analytics.
 
-The Parts-Info key is not read by this backend and is not used for catalogue lookup.
+There is no `ADMIN_API_TOKEN`, no `X-Admin-Token` header and no API-token field in either frontend. Admin endpoints use HTTP Basic authentication over HTTPS. The browser keeps the login and password only in page memory and does not save them to local/session storage.
 
 ## Verification limits
 
 A successful health check confirms only that the FastAPI process is running. A successful provider request is required to prove the API key, network access, trial entitlement and VIN coverage. OEM fitment must come from TradeSoft's returned catalogue data; the LLM is not an authority for compatibility, price, stock or order creation.
 
+## Analytics notes
 
-## Security configuration
-
-- `ADMIN_API_TOKEN` — required server-side secret for the diagnostic trace endpoint. Without it, the endpoint is disabled; never place this token in frontend JavaScript or commit it to Git.
-- `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
-- Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
-- The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
-
-
-## Admin analytics (demo)
-
-- `GET /api/admin/analytics?days=7|30|90` — request, conversation, message, VIN decode, lookup, error and latency aggregates.
-- `GET /api/admin/conversations?days=7|30|90` — per-conversation activity and elapsed duration.
-- `POST /api/analytics/events` — customer-chat lifecycle and message events; the browser sends a non-sensitive conversation ID.
-- `admin.html` — separate static administrator dashboard. It calls the Railway API and requires the server-side `ADMIN_API_TOKEN`.
 - Analytics are persisted in PostgreSQL table `ai_manager_analytics_events`; `psycopg[binary]` is required.
 - If `DATABASE_URL` is missing or PostgreSQL is unavailable, analytics endpoints return HTTP 503 and customer chat requests continue without being blocked.
 - Current demo build intentionally records a single `default` tenant. Real per-company isolation must be connected to authenticated tenant identity before multi-tenant production; the API does not trust a browser-supplied tenant ID.
 - A vehicle confirmation is counted separately from a successful parts selection. A confirmed compatible part must only be counted after the actual part-selection/fitment UI emits `selection_success`.
+- Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
