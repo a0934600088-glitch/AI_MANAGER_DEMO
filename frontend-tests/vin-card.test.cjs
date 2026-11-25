@@ -43,8 +43,8 @@ test('translated display fields are not normalized a second time', () => {
 });
 
 test('document title and visible header use the same release version', () => {
-  assert.ok(html.includes('<title>AI Manager 2.4.9</title>'));
-  assert.ok(html.includes('class="muted">v2.4.9</span>'));
+  assert.ok(html.includes('<title>AI Manager 2.4.10</title>'));
+  assert.ok(html.includes('class="muted">v2.4.10</span>'));
   assert.ok(!html.includes('2.4.8'));
 });
 test('VIN input normalization removes spaces and hyphens before lookup', () => {
