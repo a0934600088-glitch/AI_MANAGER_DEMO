@@ -14,6 +14,11 @@ test('test mode retains diagnostics while keeping the admin dashboard separate',
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
   assert.match(chat, /opsAdminUsername/);
+  assert.match(chat, /id="opsToggle"[^>]*hidden/);
+  assert.match(chat, /id="opsPanel"[^>]*hidden/);
+  assert.match(chat, /new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'test'/);
+  assert.match(chat, /opsToggle'\)\.hidden = false/);
+  assert.match(chat, /opsPanel'\)\.hidden = false/);
   assert.match(chat, /opsAdminPassword/);
   assert.match(chat, /Authorization.*Basic/s);
   assert.doesNotMatch(chat, /ADMIN_API_TOKEN|X-Admin-Token|opsAdminToken/);
