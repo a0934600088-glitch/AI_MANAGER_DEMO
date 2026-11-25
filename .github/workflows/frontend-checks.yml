@@ -2,10 +2,10 @@ name: Frontend checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [test/live-api-20261125]
   push:
     branches:
-      - "fix/vin-card-ui-20261125"
+      - "fix/vin-card-trace-security-20261125"
 
 jobs:
   frontend:
