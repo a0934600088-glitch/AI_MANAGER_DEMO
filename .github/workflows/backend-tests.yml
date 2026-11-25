@@ -2,11 +2,12 @@ name: Backend tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'fix/**', 'feature/**']
   push:
     branches:
       - "fix/**"
       - "audit/**"
+      - "feature/**"
 
 jobs:
   unittest:
