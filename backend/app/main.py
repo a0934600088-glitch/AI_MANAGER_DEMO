@@ -356,11 +356,13 @@ async def catalogue_lookup(payload: LookupRequest):
         result = await adapter.lookup(
             vin, payload.mode, payload.q, payload.lang, payload.group_id
         )
-        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "success", "TradeSoft catalogue request completed", {
+        result_status = result.get("status") if isinstance(result, dict) else None
+        response_status = "ambiguous" if result_status == "ambiguous" else "success"
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", response_status, "TradeSoft catalogue request completed", {
             "mode": payload.mode, "vin": vin, "has_query": bool(payload.q), "has_group_id": payload.group_id is not None,
         })
         return {
-            "status": "success",
+            "status": response_status,
             "mode": payload.mode,
             "vin": vin,
             "source": "tradesoft_parts_catalogs",
