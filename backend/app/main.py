@@ -6,8 +6,9 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -16,13 +17,19 @@ from app import analytics
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
-APP_VERSION = "2.4.10"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as version_file:
+    APP_VERSION = version_file.read().strip()
+if not APP_VERSION:
+    raise RuntimeError("backend/VERSION must contain the release version")
+
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
 TRADESOFT_API_TOKEN = os.getenv("TRADESOFT_API_TOKEN", "").strip()
 TRADESOFT_ENABLED = os.getenv("TRADESOFT_ENABLED", "false").strip().lower() == "true" and bool(TRADESOFT_API_TOKEN)
-ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "").strip()
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+admin_auth = HTTPBasic(auto_error=False)
 TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 app = FastAPI(
     title="AI Manager Catalog API",
@@ -48,7 +55,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "X-Conversation-ID"],
+    allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-Conversation-ID"],
 )
 
 
@@ -204,15 +211,28 @@ async def language_translate(payload: TranslationRequest):
         }) from exc
 
 
-@app.get("/api/admin/traces")
-async def admin_traces(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
-    if not ADMIN_API_TOKEN:
+def _authorize_admin(credentials: HTTPBasicCredentials | None):
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         raise HTTPException(
             status_code=503,
-            detail="Admin trace access is disabled until ADMIN_API_TOKEN is configured.",
+            detail="Admin access is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD on the backend.",
         )
-    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_API_TOKEN):
-        raise HTTPException(status_code=401, detail="Admin authentication required.")
+    valid = bool(
+        credentials
+        and secrets.compare_digest(credentials.username, ADMIN_USERNAME)
+        and secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+    )
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Administrator login required.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
+@app.get("/api/admin/traces")
+async def admin_traces(credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
     return {
         "events": list(TRACE_EVENTS),
         "retained": len(TRACE_EVENTS),
@@ -221,11 +241,7 @@ async def admin_traces(x_admin_token: str | None = Header(default=None, alias="X
 
 
 
-def _authorize_admin(x_admin_token: str | None):
-    if not ADMIN_API_TOKEN:
-        raise HTTPException(status_code=503, detail="Admin analytics is disabled until ADMIN_API_TOKEN is configured.")
-    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_API_TOKEN):
-        raise HTTPException(status_code=401, detail="Admin authentication required.")
+
 
 
 @app.post("/api/analytics/events")
@@ -242,8 +258,8 @@ async def analytics_event(payload: AnalyticsEventRequest, x_conversation_id: str
 
 
 @app.get("/api/admin/analytics")
-async def admin_analytics(days: int = 30, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
-    _authorize_admin(x_admin_token)
+async def admin_analytics(days: int = 30, credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
     try:
@@ -253,8 +269,8 @@ async def admin_analytics(days: int = 30, x_admin_token: str | None = Header(def
 
 
 @app.get("/api/admin/conversations")
-async def admin_conversations(days: int = 30, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
-    _authorize_admin(x_admin_token)
+async def admin_conversations(days: int = 30, credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
     try:
