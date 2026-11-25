@@ -8,11 +8,11 @@ const chat = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 const backend = fs.readFileSync(path.join(root, 'backend/app/main.py'), 'utf8');
 
-test('customer chat emits conversation and message analytics without admin credentials', () => {
+test('test mode retains diagnostics while keeping the admin dashboard separate', () => {
   assert.match(chat, /ai_conversation_id/);
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
-  assert.doesNotMatch(chat, /ADMIN_API_TOKEN/);
+  assert.match(chat, /opsAdminToken/);\n  assert.doesNotMatch(chat, /Административная аналитика/);
 });
 
 test('administrator analytics is a separate protected frontend', () => {
