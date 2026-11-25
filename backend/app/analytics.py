@@ -122,9 +122,9 @@ def dashboard_summary(days: int = 30) -> dict:
               COUNT(*) FILTER (WHERE event_type='parts_selection_incomplete') AS incomplete_selections,
               COUNT(*) FILTER (WHERE event_type='vehicle_confirmed') AS vehicle_confirmations,
               COUNT(*) FILTER (WHERE status_code >= 400 OR event_type='parts_lookup_failed') AS errors,
-              ROUND(AVG(duration_ms)::numeric, 1) FILTER (WHERE duration_ms IS NOT NULL) AS avg_api_duration_ms,
-              ROUND(AVG(duration_ms)::numeric, 1) FILTER (WHERE event_type='ai_response' AND duration_ms IS NOT NULL) AS avg_ai_response_ms,
-              ROUND(AVG(duration_ms)::numeric, 1) FILTER (WHERE event_type='selection_completed' AND duration_ms IS NOT NULL) AS avg_selection_ms,
+              ROUND((AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL))::numeric, 1) AS avg_api_duration_ms,
+              ROUND((AVG(duration_ms) FILTER (WHERE event_type='ai_response' AND duration_ms IS NOT NULL))::numeric, 1) AS avg_ai_response_ms,
+              ROUND((AVG(duration_ms) FILTER (WHERE event_type='selection_completed' AND duration_ms IS NOT NULL))::numeric, 1) AS avg_selection_ms,
               COALESCE(SUM((metadata->>'tokens_input')::numeric) FILTER (WHERE event_type='ai_usage'),0) AS tokens_input,
               COALESCE(SUM((metadata->>'tokens_output')::numeric) FILTER (WHERE event_type='ai_usage'),0) AS tokens_output,
               COALESCE(SUM((metadata->>'cost_usd')::numeric) FILTER (WHERE event_type='ai_usage'),0) AS ai_cost_usd
