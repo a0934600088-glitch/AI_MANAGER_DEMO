@@ -42,7 +42,7 @@ class DecodeRequest(BaseModel):
 
 
 class LookupRequest(BaseModel):
-    mode: Literal["parts", "diagrams", "diagram", "models"] = "parts"
+    mode: Literal["parts", "diagrams", "diagram", "groups", "models"] = "parts"
     vin: str | None = Field(default=None, min_length=5, max_length=40)
     brand: str | None = Field(default=None, max_length=100)
     model: str | None = Field(default=None, max_length=200)
@@ -159,7 +159,7 @@ async def providers():
                 "name": "TradeSoft OEM Parts.Catalogs",
                 "kind": "primary_oem_catalog",
                 "enabled": TRADESOFT_ENABLED,
-                "capabilities": ["vin_decode", "frame_decode", "vehicle_catalogue", "schemas", "oem_parts", "diagram_callouts"],
+                "capabilities": ["vin_decode", "frame_decode", "vehicle_catalogue", "group_navigation", "schemas", "oem_parts", "diagram_callouts"],
                 "authentication": "Server-side API key",
             }
         ],
