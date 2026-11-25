@@ -45,19 +45,19 @@ def _clean_metadata(metadata: dict | None) -> dict:
     for key, value in (metadata or {}).items():
         if key not in _SAFE_METADATA:
             continue
-        if isinstance(value, str):
-            clean[key] = value[:120]
-        elif isinstance(value, bool):
-            clean[key] = value
-        elif isinstance(value, (int, float)) and math.isfinite(float(value)):
-            clean[key] = value
-        elif key in {"tokens_input", "tokens_output", "cost_usd"} and isinstance(value, str):
+        if key in {"tokens_input", "tokens_output", "cost_usd"} and isinstance(value, str):
             try:
                 numeric = float(value)
                 if math.isfinite(numeric) and numeric >= 0:
                     clean[key] = numeric
             except ValueError:
                 continue
+        elif isinstance(value, str):
+            clean[key] = value[:120]
+        elif isinstance(value, bool):
+            clean[key] = value
+        elif isinstance(value, (int, float)) and math.isfinite(float(value)):
+            clean[key] = value
     return clean
 
 
