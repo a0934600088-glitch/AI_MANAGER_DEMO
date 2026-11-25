@@ -92,10 +92,10 @@ class VehicleContractTests(unittest.TestCase):
         try:
             main.ADMIN_API_TOKEN = "unit-test-value"
             with self.assertRaises(HTTPException) as missing:
-                asyncio.run(main.admin_traces(None))
+                asyncio.run(main.admin_traces(None, None))
             self.assertEqual(missing.exception.status_code, 401)
 
-            result = asyncio.run(main.admin_traces("unit-test-value"))
+            result = asyncio.run(main.admin_traces(None, "unit-test-value"))
             self.assertIn("events", result)
         finally:
             main.ADMIN_API_TOKEN = previous
