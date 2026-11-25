@@ -12,7 +12,8 @@ test('test mode retains diagnostics while keeping the admin dashboard separate',
   assert.match(chat, /ai_conversation_id/);
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
-  assert.match(chat, /opsAdminToken/);\n  assert.doesNotMatch(chat, /Административная аналитика/);
+  assert.match(chat, /opsAdminToken/);
+  assert.doesNotMatch(chat, /Административная аналитика/);
 });
 
 test('administrator analytics is a separate protected frontend', () => {
