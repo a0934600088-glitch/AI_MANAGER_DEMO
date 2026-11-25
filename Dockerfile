@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --no-deps argostranslate==1.11.0
 
 COPY backend/app ./app
+COPY backend/VERSION ./VERSION
 COPY index.html ./index.html
 
 EXPOSE 8000
