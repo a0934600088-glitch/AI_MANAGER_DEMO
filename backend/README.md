@@ -29,7 +29,7 @@ The backend preserves the provider's `catalogId`, `carId` and `criteria` values.
 - `GET /api/catalog/v1/providers` — active TradeSoft provider and nine reserved slots.
 - `POST /api/catalog/v1/vehicles/decode` — real TradeSoft VIN decode.
 - `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests. For `parts`, send `group_id` after selecting a group to retrieve OE part numbers and diagram callouts; without `group_id`, `q` searches schemas by part name.
-- `GET /api/admin/traces` — recent provider request trace.
+- `GET /api/admin/traces` — recent provider request trace; requires the `X-Admin-Token` header and a server-side `ADMIN_API_TOKEN`.
 - `GET /docs` — interactive API documentation.
 
 ## Request examples
@@ -71,3 +71,11 @@ The Parts-Info key is not read by this backend and is not used for catalogue loo
 ## Verification limits
 
 A successful health check confirms only that the FastAPI process is running. A successful provider request is required to prove the API key, network access, trial entitlement and VIN coverage. OEM fitment must come from TradeSoft's returned catalogue data; the LLM is not an authority for compatibility, price, stock or order creation.
+
+
+## Security configuration
+
+- `ADMIN_API_TOKEN` — required server-side secret for the diagnostic trace endpoint. Without it, the endpoint is disabled; never place this token in frontend JavaScript or commit it to Git.
+- `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
+- Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
+- The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
