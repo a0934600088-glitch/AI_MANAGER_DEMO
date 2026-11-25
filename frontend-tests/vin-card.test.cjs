@@ -42,6 +42,10 @@ test('translated display fields are not normalized a second time', () => {
   assert.match(html, /showVehicle\(\{normalizedFields:displayVehicleFields\}\)/);
 });
 
+test('VIN input normalization removes spaces and hyphens before lookup', () => {
+  assert.match(html, /async function decode\(v\)\{const clean=v\.replace\(\/[\\s-]\/g,' '\)\.toUpperCase\(\);/);
+});
+
 test('ambiguous VIN and catalogue results stop automatic selection', () => {
   assert.match(html, /status==='ambiguous'/);
   assert.match(html, /d\?\.status==='ambiguous'/);
