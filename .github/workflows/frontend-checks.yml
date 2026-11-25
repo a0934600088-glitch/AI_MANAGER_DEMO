@@ -1,0 +1,32 @@
+name: Frontend checks
+
+on:
+  pull_request:
+    branches: [test/live-api-20261125]
+  push:
+    branches:
+      - "fix/vin-card-trace-security-20261125"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check inline JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, flags=re.S | re.I)
+          inline = [script for script in scripts if script.strip()]
+          if not inline:
+              raise SystemExit("No inline application script found")
+          Path("/tmp/ai-manager-inline.js").write_text("\\n".join(inline), encoding="utf-8")
+          PY
+          node --check /tmp/ai-manager-inline.js
+      - name: Run frontend contract tests
+        run: node --test frontend-tests/*.test.cjs
