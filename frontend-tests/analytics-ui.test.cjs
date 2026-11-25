@@ -12,7 +12,7 @@ test('existing customer chat and admin log remain present', () => {
     assert.match(chat, new RegExp('id="' + id + '"'));
   }
   assert.match(chat, /async function refreshOps/);
-  assert.match(chat, /api\('\/api\/admin\/traces'/);
+  assert.match(chat, /fetch\(API\+'\/api\/admin\/traces'/);
 });
 
 test('analytics instrumentation does not send raw message text', () => {
