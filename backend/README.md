@@ -1,22 +1,35 @@
-# AI Manager Catalog API — v2.2.0
+# AI Manager Catalog API — v2.4.9
 
-FastAPI backend for the live AI Manager test release. Railway serves the customer interface and API from the same origin.
+FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
-## Live providers
+## Active provider
 
-- **SoloCatalog MCP**: `https://solocatalog.com/mcp`, Streamable HTTP. Light use has a small free daily allowance without a key. Higher volume requires a provider API key; do not put it in frontend code or Git.
-- **NHTSA vPIC**: public VIN decoder without a key. It is not an OEM parts catalogue and does not provide parts diagrams.
+- **TradeSoft OEM Parts.Catalogs** — VIN/FRAME lookup, vehicle-specific catalogue schemas, group navigation and OEM parts/diagram data.
+- **Parts-Info** — key may be stored in Railway for a later trial, but this backend does not call it.
+- **Reserved provider slots 2–10** — extension points only; no outbound calls are made to unconfigured providers.
+- **SoloCatalog MCP and NHTSA vPIC** — disabled and removed from active VIN/parts lookup paths.
 
-The API calls SoloCatalog and NHTSA in parallel for VIN decoding. Parts search, diagrams and diagram-part requests are sent to SoloCatalog. Provider results and failures remain separate; synthetic fixtures are not a fallback.
+## TradeSoft REST API
 
-## Deploy
+Base URL: `https://api.parts-catalogs.com/v1`
 
-The Railway project `AI Manager v2.1.2` is connected to `a0934600088-glitch/AI_MANAGER_DEMO` and builds from the repository root using the root Dockerfile. The service listens on Railway's `PORT` (currently routed to 8080).
+Authentication: raw API key in the `Authorization` header (no `Bearer` prefix).
 
-- `GET /health` — process health and provider configuration. This does not prove upstream catalogue reachability.
-- `GET /api/catalog/v1/providers` — configured providers and capabilities.
-- `POST /api/catalog/v1/vehicles/decode` — real VIN decode via SoloCatalog MCP + NHTSA.
-- `POST /api/catalog/v1/lookup` — `parts`, `diagrams`, `diagram`, or `models` lookup via SoloCatalog MCP.
+Documented flow:
+1. `GET /car/info?q={VIN}` returns vehicle candidates with `catalogId`, `carId` and `criteria`.
+2. `GET /catalogs/{catalogId}/groups2/` navigates vehicle-specific catalogue groups.
+3. `GET /catalogs/{catalogId}/schemas` returns vehicle schemas and can be filtered by `partName`.
+4. `GET /catalogs/{catalogId}/parts2` retrieves OE parts, diagram image and callout positions for a selected `groupId`.
+
+The backend preserves the provider's `catalogId`, `carId` and `criteria` values. It caches a VIN decode in process memory for 24 hours to avoid repeating the initial VIN lookup during the same running process.
+
+## API routes
+
+- `GET /health` — backend process health and active provider state; does not prove upstream reachability.
+- `GET /api/catalog/v1/providers` — active TradeSoft provider and nine reserved slots.
+- `POST /api/catalog/v1/vehicles/decode` — real TradeSoft VIN decode.
+- `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests. For `parts`, send `group_id` after selecting a group to retrieve OE part numbers and diagram callouts; without `group_id`, `q` searches schemas by part name.
+- `GET /api/admin/traces` — recent provider request trace.
 - `GET /docs` — interactive API documentation.
 
 ## Request examples
@@ -28,38 +41,33 @@ POST /api/catalog/v1/vehicles/decode
 
 ```json
 POST /api/catalog/v1/lookup
+{"mode":"groups","vin":"WVWZZZAUZJP594600","lang":"ru"}
+```
+
+```json
+POST /api/catalog/v1/lookup
 {"mode":"diagrams","vin":"WVWZZZAUZJP594600","lang":"ru"}
 ```
 
 ```json
 POST /api/catalog/v1/lookup
-{"mode":"parts","vin":"WVWZZZAUZJP594600","q":"front brake pads","lang":"en"}
+{"mode":"parts","vin":"WVWZZZAUZJP594600","q":"brake pads","lang":"en"}
 ```
 
-## Important limits
-
-- A successful health check means only that this FastAPI process is running. Upstream provider reachability is proven only by an actual request.
-- NHTSA VIN data must never be presented as OEM fitment confirmation.
-- A vehicle decode does not guarantee that a diagram exists for that vehicle. The catalogue response must contain the original diagram/image URL and source callouts before the UI labels it as an OEM diagram.
-- No generated or synthetic diagram is used as a fallback.
-- The architecture reserves up to 10 provider slots; only SoloCatalog and NHTSA are currently enabled. RockAuto and Tradesoft are not connected.
-- SoloCatalog coverage varies by make, market and source release. Its light no-key allowance is limited and subject to provider terms/rate limits.
-- Verify commercial display, storage and multi-tenant usage rights before commercial rollout. The provider's terms prohibit automated scraping, bulk extraction and unauthorized reuse.
-
-## Local development
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+```json
+POST /api/catalog/v1/lookup
+{"mode":"parts","vin":"WVWZZZAUZJP594600","group_id":"<selected-group-id>","lang":"ru"}
 ```
 
-No API key is required for the documented light-use MCP allowance. For higher volume, configure `SOLOCATALOG_API_KEY` server-side and pass it as a Bearer header in the MCP client. Never commit secrets.
+## Environment
 
+- `TRADESOFT_API_TOKEN` — required API key, set only in Railway service variables.
+- `TRADESOFT_ENABLED=true` — enables the primary OEM provider.
+- `CATALOG_TIMEOUT_SECONDS=25` — upstream timeout.
+- `CORS_ORIGINS` — allowed browser origins.
 
-## Language and translation
-- `GET /api/language/v1/languages` — core UI languages and languages available in the Argos model index.
-- `POST /api/language/v1/translate` — batch translation using `source`, `target`, and `domain` (`general` or `automotive`).
-- Uses self-hosted open-source Argos Translate models. Models download on first use and are cached in the container.
-- Automotive mode protects VINs, OE/OEM-style references, part identifiers, engine/gearbox codes and measurements; common workshop terms are normalized through the automotive glossary.
-- No public third-party translation endpoint receives customer text. Runtime hosting and compute are still infrastructure costs.
+The Parts-Info key is not read by this backend and is not used for catalogue lookup.
+
+## Verification limits
+
+A successful health check confirms only that the FastAPI process is running. A successful provider request is required to prove the API key, network access, trial entitlement and VIN coverage. OEM fitment must come from TradeSoft's returned catalogue data; the LLM is not an authority for compatibility, price, stock or order creation.
