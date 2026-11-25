@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
-APP_VERSION = "2.4.9"
+APP_VERSION = "2.4.10"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
 TRADESOFT_API_TOKEN = os.getenv("TRADESOFT_API_TOKEN", "").strip()
 TRADESOFT_ENABLED = os.getenv("TRADESOFT_ENABLED", "false").strip().lower() == "true" and bool(TRADESOFT_API_TOKEN)
@@ -171,6 +171,35 @@ async def providers():
     }
 
 
+def _first_vehicle_text(record: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = record.get(key)
+        if isinstance(value, (str, int, float)) and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _normalize_tradesoft_vehicle(record: dict[str, Any]) -> dict[str, Any]:
+    """Expose documented TradeSoft CarInfo fields in the stable UI contract.
+
+    TradeSoft CarInfo uses 'title' and 'brand'; the chat UI consumes 'model'
+    and 'brand'. Keep every original provider field and identifier unchanged.
+    """
+    normalized = dict(record)
+    brand = _first_vehicle_text(record, "brand", "make", "manufacturer", "manufacturerName")
+    model = _first_vehicle_text(
+        record, "model", "modelName", "model_name", "modelDescription",
+        "model_description", "vehicleName", "vehicle_name", "title",
+    )
+    if brand:
+        normalized["brand"] = brand
+        normalized["make"] = brand
+    if model:
+        normalized["model"] = model
+        normalized["model_description"] = model
+    return normalized
+
+
 @app.post("/api/catalog/v1/vehicles/decode")
 async def decode_vehicle(payload: DecodeRequest):
     vin = payload.vin.strip().upper()
@@ -180,19 +209,37 @@ async def decode_vehicle(payload: DecodeRequest):
     try:
         candidates = await adapter.decode(vin, "vin", payload.lang)
         if len(candidates) == 1:
-            vehicle: Any = candidates[0]
+            vehicle: Any = _normalize_tradesoft_vehicle(candidates[0])
             status = "success"
         else:
-            vehicle = {"candidates": candidates}
+            vehicle = {"candidates": [_normalize_tradesoft_vehicle(item) for item in candidates]}
             status = "ambiguous"
+        catalog_verified = bool(
+            status == "success"
+            and isinstance(vehicle, dict)
+            and vehicle.get("catalogId") is not None
+            and vehicle.get("carId") is not None
+        )
+        vehicle_data_complete = bool(
+            isinstance(vehicle, dict) and vehicle.get("brand") and vehicle.get("model")
+        )
         trace("VIN decode", "tradesoft_parts_catalogs", status, "TradeSoft OEM VIN lookup completed", {
-            "vin": vin, "candidate_count": len(candidates),
+            "vin": vin,
+            "candidate_count": len(candidates),
+            "candidate_fields": sorted(candidates[0].keys()) if candidates else [],
+            "has_catalog_id": bool(candidates and candidates[0].get("catalogId") is not None),
+            "has_car_id": bool(candidates and candidates[0].get("carId") is not None),
+            "has_title": bool(candidates and _first_vehicle_text(candidates[0], "title")),
+            "has_brand": bool(candidates and _first_vehicle_text(candidates[0], "brand")),
+            "vehicle_data_complete": vehicle_data_complete,
         })
         return {
             "vin": vin,
+            "status": status,
             "vehicle": vehicle,
+            "vehicle_data_complete": vehicle_data_complete,
             "providers": [_provider_result("tradesoft_parts_catalogs", status, candidates)],
-            "is_oem_catalog_verified": True,
+            "is_oem_catalog_verified": catalog_verified,
             "source": "tradesoft_parts_catalogs",
         }
     except TradesoftError as exc:
