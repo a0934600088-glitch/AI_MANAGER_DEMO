@@ -51,6 +51,13 @@ def _clean_metadata(metadata: dict | None) -> dict:
             clean[key] = value
         elif isinstance(value, (int, float)) and math.isfinite(float(value)):
             clean[key] = value
+        elif key in {"tokens_input", "tokens_output", "cost_usd"} and isinstance(value, str):
+            try:
+                numeric = float(value)
+                if math.isfinite(numeric) and numeric >= 0:
+                    clean[key] = numeric
+            except ValueError:
+                continue
     return clean
 
 
@@ -88,6 +95,17 @@ def ensure_schema() -> None:
         _SCHEMA_READY = True
 
 
+def database_health() -> dict:
+    try:
+        ensure_schema()
+        with _connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+        return {"status": "connected", "schema": "ready"}
+    except Exception as exc:
+        # Never return DSNs, hostnames, credentials, or driver exception text.
+        return {"status": "unavailable", "error_type": type(exc).__name__}
+
+
 def record_event(event_type: str, *, conversation_id: str | None = None,
                  route: str | None = None, method: str | None = None,
                  status_code: int | None = None, duration_ms: float | None = None,
@@ -118,7 +136,7 @@ def dashboard_summary(days: int = 30) -> dict:
               COUNT(*) FILTER (WHERE event_type='vin_decode') AS vin_decodes,
               COUNT(*) FILTER (WHERE event_type='parts_lookup') AS parts_lookups,
               COUNT(*) FILTER (WHERE event_type='selection_success') AS successful_selections,
-              COUNT(*) FILTER (WHERE event_type IN ('selection_failed','parts_lookup_failed')) AS failed_selections,
+              COUNT(*) FILTER (WHERE event_type IN ('selection_failed','parts_lookup_failed') OR (event_type='parts_lookup' AND status_code >= 400)) AS failed_selections,
               COUNT(*) FILTER (WHERE event_type='parts_selection_incomplete') AS incomplete_selections,
               COUNT(*) FILTER (WHERE event_type='vehicle_confirmed') AS vehicle_confirmations,
               COUNT(*) FILTER (WHERE status_code >= 400 OR event_type='parts_lookup_failed') AS errors,
@@ -146,7 +164,7 @@ def dashboard_summary(days: int = 30) -> dict:
               ROUND(AVG(duration_ms)::numeric,1) AS avg_duration_ms
             FROM ai_manager_analytics_events
             WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
-              AND event_type IN ('http_request','vin_decode','parts_lookup')
+              AND event_type='catalog_request'
             GROUP BY 1,2 ORDER BY requests DESC
         """, (days,)).fetchall()
         request_types = conn.execute("""
