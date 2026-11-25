@@ -106,7 +106,7 @@ function showVehicle(response){
  el.append(grid);
  const ask=document.createElement('div');ask.className='vehicle-confirm';ask.textContent=t('vehicleAsk');el.append(ask);
  const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
- const yes=document.createElement('button');yes.type='button';yes.textContent=t('confirm');yes.onclick=()=>{vehicleConfirmed=true;vin=vehicleVin||vin;ask.textContent=t('vehicleDone');actions.remove();add('Автомобиль подтверждён. Теперь можно подбирать запчасти по каталогам.','bot','good')};
+ const yes=document.createElement('button');yes.type='button';yes.textContent=t('confirm');yes.onclick=()=>{vehicleConfirmed=true;vin=vehicleVin||vin;trackEvent('vehicle_confirmed',{surface:'customer_chat'});ask.textContent=t('vehicleDone');actions.remove();add('Автомобиль подтверждён. Теперь можно подбирать запчасти по каталогам.','bot','good')};
  const no=document.createElement('button');no.type='button';no.className='secondary';no.textContent=t('reject');no.onclick=()=>{vehicleConfirmed=false;vin=null;ask.textContent='Данные не подтверждены. Проверьте VIN и отправьте правильный номер.';$('input').value=vehicleVin||'';resizeInput();syncComposer();actions.remove()};
  actions.append(yes,no);el.append(actions);$('messages').append(el);scrollEnd();return true
 }
