@@ -271,8 +271,6 @@ async def decode_vehicle(payload: DecodeRequest):
     primary = next((r.get("data") for r in results if r["provider"] == "solocatalog_mcp" and r["status"] == "success"), None)
     if not primary:
         primary = next((r.get("data") for r in results if r["provider"] == "nhtsa_vpic" and r["status"] == "success"), None)
-    if not primary:
-        raise HTTPException(status_code=502, detail={"message": "All VIN providers failed", "providers": results})
     if TRADESOFT_ADAPTER:
         try:
             candidates = await TRADESOFT_ADAPTER.decode(vin, "vin")
@@ -284,6 +282,8 @@ async def decode_vehicle(payload: DecodeRequest):
     tradesoft_data = next((r.get("data") for r in results if r["provider"] == "tradesoft_parts_catalogs" and r["status"] == "success" and r.get("data")), None)
     if tradesoft_data:
         primary = tradesoft_data[0] if len(tradesoft_data) == 1 else {"candidates": tradesoft_data, "status": "ambiguous"}
+    if not primary:
+        raise HTTPException(status_code=502, detail={"message": "All VIN providers failed", "providers": results})
     return {"vin": vin, "vehicle": primary, "providers": results, "is_oem_catalog_verified": bool(tradesoft_data)}
 
 
