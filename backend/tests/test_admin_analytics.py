@@ -11,6 +11,7 @@ from app import analytics, main
 class AdminAnalyticsContractTests(unittest.TestCase):
     def test_existing_admin_token_auth_is_preserved(self):
         old = main.ADMIN_API_TOKEN
+        old_user, old_pass = main.ADMIN_USERNAME, main.ADMIN_PASSWORD
         try:
             main.ADMIN_API_TOKEN = "token-test"
             main.ADMIN_USERNAME = ""
@@ -20,6 +21,7 @@ class AdminAnalyticsContractTests(unittest.TestCase):
                 main._authorize_admin(None, "wrong")
         finally:
             main.ADMIN_API_TOKEN = old
+            main.ADMIN_USERNAME, main.ADMIN_PASSWORD = old_user, old_pass
 
     def test_basic_auth_is_supported_when_configured(self):
         old_user, old_pass = main.ADMIN_USERNAME, main.ADMIN_PASSWORD
