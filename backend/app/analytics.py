@@ -50,6 +50,7 @@ def record_event(event_type: str, *, conversation_id: str | None = None,
                  route: str | None = None, method: str | None = None,
                  status_code: int | None = None, duration_ms: float | None = None,
                  metadata: dict | None = None) -> None:
+    ensure_schema()
     with _connect() as conn:
         conn.execute("""
             INSERT INTO ai_manager_analytics_events
@@ -60,6 +61,7 @@ def record_event(event_type: str, *, conversation_id: str | None = None,
               duration_ms, json.dumps(metadata or {}, ensure_ascii=False)))
 
 def dashboard_summary(days: int = 30) -> dict:
+    ensure_schema()
     with _connect() as conn:
         totals = conn.execute("""
             SELECT COUNT(*) AS events,
@@ -104,6 +106,7 @@ def dashboard_summary(days: int = 30) -> dict:
             "scope": "default demo tenant"}
 
 def conversation_summary(days: int = 30) -> list[dict]:
+    ensure_schema()
     with _connect() as conn:
         rows = conn.execute("""
             SELECT conversation_id,
