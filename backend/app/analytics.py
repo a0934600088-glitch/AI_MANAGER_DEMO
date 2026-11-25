@@ -21,7 +21,7 @@ _SCHEMA_LOCK = Lock()
 _CONVERSATION_ID = re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
 _SAFE_METADATA = {
     "provider", "mode", "surface", "language", "length", "reason", "status",
-    "duration_ms", "tokens_input", "tokens_output", "cost_usd", "model", "stage",
+    "duration_ms", "catalog_verified", "selection", "tokens_input", "tokens_output", "cost_usd", "model", "stage",
     "result", "http_status", "request_kind",
 }
 
