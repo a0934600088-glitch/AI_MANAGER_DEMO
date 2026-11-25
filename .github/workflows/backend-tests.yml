@@ -2,11 +2,12 @@ name: Backend tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'fix/**', 'feature/**']
   push:
     branches:
       - "fix/**"
       - "audit/**"
+      - "feature/**"
 
 jobs:
   unittest:
@@ -22,6 +23,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - name: Install backend test dependencies
-        run: python -m pip install "fastapi>=0.115,<1" "httpx>=0.27,<1" "pydantic>=2,<3"
+        run: python -m pip install "fastapi>=0.115,<1" "httpx>=0.27,<1" "pydantic>=2,<3" "psycopg[binary]>=3.2,<4"
+      - name: Compile backend
+        run: python -m compileall -q app
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
