@@ -19,6 +19,10 @@ class FakeResponse:
     def json(self):
         return json.loads(self.text)
 
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError("HTTP error")
+
 
 class FakeMCPClient:
     def __init__(self, **kwargs):
