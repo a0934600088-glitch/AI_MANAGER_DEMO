@@ -1,22 +1,19 @@
 import asyncio
-import json
 import os
 import re
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
-APP_VERSION = "2.2.0"
-SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
-NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
+APP_VERSION = "2.4.9"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
 TRADESOFT_API_TOKEN = os.getenv("TRADESOFT_API_TOKEN", "").strip()
 TRADESOFT_ENABLED = os.getenv("TRADESOFT_ENABLED", "false").strip().lower() == "true" and bool(TRADESOFT_API_TOKEN)
@@ -26,14 +23,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 app = FastAPI(
     title="AI Manager Catalog API",
     version=APP_VERSION,
-    description="Catalog integrations: SoloCatalog MCP, NHTSA vPIC and optional TradeSoft OEM Parts.Catalogs.",
+    description="OEM catalogue integration through TradeSoft Parts.Catalogs. Other provider slots are reserved and disabled.",
 )
 
-allowed_origins = [
-    item.strip()
-    for item in os.getenv("CORS_ORIGINS", "*").split(",")
-    if item.strip()
-]
+allowed_origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "*").split(",") if item.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -54,7 +47,8 @@ class LookupRequest(BaseModel):
     brand: str | None = Field(default=None, max_length=100)
     model: str | None = Field(default=None, max_length=200)
     diagram: str | None = Field(default=None, max_length=200)
-    q: str | None = Field(default=None, max_length=80)
+    q: str | None = Field(default=None, max_length=120)
+    group_id: str | int | None = None
     lang: Literal["en", "uk", "az", "ru"] = "ru"
 
 
@@ -63,10 +57,6 @@ class TranslationRequest(BaseModel):
     source: str = Field(default="auto", min_length=2, max_length=8)
     target: str = Field(min_length=2, max_length=8)
     domain: Literal["general", "automotive"] = "general"
-
-
-class MCPError(RuntimeError):
-    pass
 
 
 TRACE_EVENTS = deque(maxlen=250)
@@ -83,87 +73,6 @@ def trace(stage: str, provider: str, status: str, message: str, details: Any = N
     })
 
 
-def _mcp_payload(response: httpx.Response) -> dict[str, Any]:
-    if response.status_code >= 400:
-        raise MCPError(f"SoloCatalog MCP HTTP {response.status_code}")
-    content_type = response.headers.get("content-type", "")
-    body = response.text
-    if response.status_code == 202 and not body.strip():
-        return {}
-    if "text/event-stream" in content_type:
-        data_lines = [line[5:].strip() for line in body.splitlines() if line.startswith("data:")]
-        if not data_lines:
-            raise MCPError("SoloCatalog MCP returned an empty event stream")
-        body = data_lines[-1]
-    try:
-        return json.loads(body)
-    except ValueError as exc:
-        raise MCPError("SoloCatalog MCP returned an invalid JSON-RPC response") from exc
-
-
-async def mcp_request(client: httpx.AsyncClient, payload: dict, session_id: str | None = None):
-    headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
-    if session_id:
-        headers["Mcp-Session-Id"] = session_id
-        headers["MCP-Protocol-Version"] = "2025-03-26"
-    response = await client.post(SOLOCATALOG_MCP_URL, headers=headers, json=payload)
-    return _mcp_payload(response), response.headers.get("Mcp-Session-Id", session_id)
-
-
-async def solo_call(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-        init, session_id = await mcp_request(client, {
-            "jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {},
-                "clientInfo": {"name": "ai-manager-demo", "version": APP_VERSION},
-            },
-        })
-        if init.get("error"):
-            raise MCPError(str(init["error"]))
-        await mcp_request(client, {
-            "jsonrpc": "2.0", "method": "notifications/initialized", "params": {}
-        }, session_id)
-        listed, session_id = await mcp_request(client, {
-            "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
-        }, session_id)
-        if listed.get("error"):
-            raise MCPError(str(listed["error"]))
-        tools = listed.get("result", {}).get("tools", [])
-        tool = next((t for t in tools if t.get("name") == tool_name), None)
-        if not tool:
-            raise MCPError(f"SoloCatalog MCP tool '{tool_name}' is not available")
-        schema = tool.get("inputSchema", {}) or {}
-        properties = schema.get("properties", {})
-        required = schema.get("required", [])
-        safe_args = {k: v for k, v in arguments.items() if k in properties and v is not None}
-        missing = [key for key in required if key not in safe_args]
-        if missing:
-            raise MCPError(f"Required arguments for {tool_name} are not available: {', '.join(missing)}")
-        called, _ = await mcp_request(client, {
-            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-            "params": {"name": tool_name, "arguments": safe_args},
-        }, session_id)
-        if called.get("error"):
-            raise MCPError(str(called["error"]))
-        result = called.get("result", {})
-        if result.get("isError"):
-            raise MCPError(json.dumps(result.get("content", []), ensure_ascii=False))
-        return {"tool": tool_name, "data": result, "provider": "solocatalog_mcp"}
-
-
-async def nhtsa_decode(vin: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-        response = await client.get(f"{NHTSA_BASE_URL}/DecodeVinValuesExtended/{vin}", params={"format": "json"})
-        response.raise_for_status()
-        payload = response.json()
-    rows = payload.get("Results", [])
-    row = rows[0] if rows else {}
-    useful = {k: v for k, v in row.items() if v not in (None, "", "0", "Not Applicable")}
-    return {"provider": "nhtsa_vpic", "data": useful}
-
-
 def _provider_result(provider: str, status: str, data: Any = None, error: str | None = None):
     result = {"provider": provider, "status": status}
     if data is not None:
@@ -171,6 +80,16 @@ def _provider_result(provider: str, status: str, data: Any = None, error: str | 
     if error:
         result["error"] = error
     return result
+
+
+def _require_tradesoft():
+    if not TRADESOFT_ADAPTER:
+        raise HTTPException(status_code=503, detail={
+            "provider": "tradesoft_parts_catalogs",
+            "status": "not_configured",
+            "message": "OEM Parts.Catalogs is not enabled. Configure TRADESOFT_API_TOKEN and TRADESOFT_ENABLED=true on the backend.",
+        })
+    return TRADESOFT_ADAPTER
 
 
 @app.get("/")
@@ -187,13 +106,10 @@ async def health():
         "status": "ok",
         "version": APP_VERSION,
         "providers": [
-            {"id": "argos_translate", "type": "translation", "auth": "open-source self-hosted models", "enabled": True},
-            {"id": "solocatalog_mcp", "type": "parts_catalog", "auth": "no-key light-use allowance", "enabled": True},
-            {"id": "nhtsa_vpic", "type": "vin_decoder", "auth": "public", "enabled": True},
-            {"id": "tradesoft_parts_catalogs", "type": "oem_vehicle_catalog", "auth": "server environment token", "enabled": TRADESOFT_ENABLED},
+            {"id": "tradesoft_parts_catalogs", "type": "primary_oem_catalog", "enabled": TRADESOFT_ENABLED},
         ],
-        "provider_limit_per_tenant": 10,
-        "note": "Health confirms this adapter is running; provider reachability is tested on actual requests.",
+        "reserved_provider_slots": 9,
+        "note": "Process health does not prove upstream reachability; a successful OEM request is required.",
     }
 
 
@@ -235,77 +151,88 @@ async def admin_traces():
 async def providers():
     return {
         "limit": 10,
-        "configured": 2 + int(TRADESOFT_ENABLED),
+        "configured": int(TRADESOFT_ENABLED),
+        "primary_provider": "tradesoft_parts_catalogs" if TRADESOFT_ENABLED else None,
         "providers": [
-            {"id": "solocatalog_mcp", "name": "SoloCatalog", "kind": "parts_catalog", "capabilities": ["vin_decode", "parts_search", "diagrams", "diagram_parts", "oem_lookup"], "authentication": "No key for small daily MCP allowance"},
-            {"id": "nhtsa_vpic", "name": "NHTSA vPIC", "kind": "vin_decoder", "capabilities": ["vin_decode"], "authentication": "Public, no key", "catalog": False},
-        ] + ([{"id": "tradesoft_parts_catalogs", "name": "TradeSoft Parts.Catalogs", "kind": "oem_vehicle_catalog", "capabilities": ["vin_decode", "frame_decode"], "authentication": "Server environment token"}] if TRADESOFT_ENABLED else []),
-        "not_configured": ["RockAuto unofficial integration"] + ([] if TRADESOFT_ENABLED else ["Parts-Catalogs / Tradesoft"]),
+            {
+                "id": "tradesoft_parts_catalogs",
+                "name": "TradeSoft OEM Parts.Catalogs",
+                "kind": "primary_oem_catalog",
+                "enabled": TRADESOFT_ENABLED,
+                "capabilities": ["vin_decode", "frame_decode", "vehicle_catalogue", "schemas", "oem_parts", "diagram_callouts"],
+                "authentication": "Server-side API key",
+            }
+        ],
+        "reserved_slots": [
+            {"id": f"catalog_slot_{i:02d}", "name": f"Reserved catalogue slot {i}", "configured": False, "enabled": False}
+            for i in range(2, 11)
+        ],
+        "disabled_legacy_providers": ["solocatalog_mcp", "nhtsa_vpic"],
     }
 
 
 @app.post("/api/catalog/v1/vehicles/decode")
 async def decode_vehicle(payload: DecodeRequest):
     vin = payload.vin.strip().upper()
-    if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{5,40}", vin):
-        raise HTTPException(status_code=422, detail="VIN/frame contains unsupported characters.")
-    tasks = await asyncio.gather(
-        solo_call("decode_vin", {"vin": vin, "lang": payload.lang}),
-        nhtsa_decode(vin),
-        return_exceptions=True,
-    )
-    results = []
-    for provider, item in zip(("solocatalog_mcp", "nhtsa_vpic"), tasks):
-        if isinstance(item, Exception):
-            results.append(_provider_result(provider, "unavailable", error=str(item)[:300]))
+    if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
+        raise HTTPException(status_code=422, detail="VIN must contain 17 valid characters.")
+    adapter = _require_tradesoft()
+    try:
+        candidates = await adapter.decode(vin, "vin", payload.lang)
+        if len(candidates) == 1:
+            vehicle: Any = candidates[0]
+            status = "success"
         else:
-            results.append(_provider_result(provider, "success", item.get("data")))
-    for provider_result in results:
-        trace(
-            "VIN decode",
-            provider_result["provider"],
-            provider_result["status"],
-            "VIN provider request completed" if provider_result["status"] == "success" else "VIN provider request failed",
-            {"vin": vin, "error": provider_result.get("error")},
-        )
-    primary = next((r.get("data") for r in results if r["provider"] == "solocatalog_mcp" and r["status"] == "success"), None)
-    if not primary:
-        primary = next((r.get("data") for r in results if r["provider"] == "nhtsa_vpic" and r["status"] == "success"), None)
-    if TRADESOFT_ADAPTER:
-        try:
-            candidates = await TRADESOFT_ADAPTER.decode(vin, "vin")
-            results.append(_provider_result("tradesoft_parts_catalogs", "success", candidates))
-            trace("VIN decode", "tradesoft_parts_catalogs", "success", "TradeSoft OEM VIN request completed", {"vin": vin, "candidate_count": len(candidates)})
-        except TradesoftError as exc:
-            results.append(_provider_result("tradesoft_parts_catalogs", exc.code, error=exc.message))
-            trace("VIN decode", "tradesoft_parts_catalogs", exc.code, "TradeSoft OEM VIN request failed", {"vin": vin, "http_status": exc.status_code})
-    tradesoft_data = next((r.get("data") for r in results if r["provider"] == "tradesoft_parts_catalogs" and r["status"] == "success" and r.get("data")), None)
-    if tradesoft_data:
-        primary = tradesoft_data[0] if len(tradesoft_data) == 1 else {"candidates": tradesoft_data, "status": "ambiguous"}
-    if not primary:
-        raise HTTPException(status_code=502, detail={"message": "All VIN providers failed", "providers": results})
-    return {"vin": vin, "vehicle": primary, "providers": results, "is_oem_catalog_verified": bool(tradesoft_data)}
+            vehicle = {"candidates": candidates}
+            status = "ambiguous"
+        trace("VIN decode", "tradesoft_parts_catalogs", status, "TradeSoft OEM VIN lookup completed", {
+            "vin": vin, "candidate_count": len(candidates),
+        })
+        return {
+            "vin": vin,
+            "vehicle": vehicle,
+            "providers": [_provider_result("tradesoft_parts_catalogs", status, candidates)],
+            "is_oem_catalog_verified": True,
+            "source": "tradesoft_parts_catalogs",
+        }
+    except TradesoftError as exc:
+        trace("VIN decode", "tradesoft_parts_catalogs", exc.code, exc.message, {
+            "vin": vin, "http_status": exc.status_code,
+        })
+        raise HTTPException(status_code=502, detail={
+            "provider": "tradesoft_parts_catalogs", "status": exc.code, "message": exc.message,
+        }) from exc
 
 
 @app.post("/api/catalog/v1/lookup")
 async def catalogue_lookup(payload: LookupRequest):
-    if payload.mode != "models" and not payload.vin:
-        raise HTTPException(status_code=422, detail="A VIN is required for vehicle-specific catalogue lookup.")
-    if payload.mode == "parts" and not payload.q:
-        raise HTTPException(status_code=422, detail="A part name or number is required.")
-    if payload.mode == "models":
-        tool, args = "find_models", {"brand": payload.brand, "q": payload.q, "lang": payload.lang}
-    elif payload.mode == "diagrams":
-        tool, args = "list_diagrams", {"vin": payload.vin, "lang": payload.lang}
-    elif payload.mode == "diagram":
-        tool, args = "get_diagram_parts", {"vin": payload.vin, "model": payload.model, "diagram": payload.diagram, "lang": payload.lang}
-    else:
-        tool, args = "search_parts", {"vin": payload.vin, "q": payload.q, "query": payload.q, "part_name": payload.q, "lang": payload.lang}
+    if not payload.vin:
+        raise HTTPException(status_code=422, detail="A VIN is required for OEM catalogue lookup.")
+    if payload.mode == "parts" and not payload.q and not payload.group_id:
+        raise HTTPException(status_code=422, detail="A part name or selected group_id is required.")
+    adapter = _require_tradesoft()
+    vin = payload.vin.strip().upper()
+    if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
+        raise HTTPException(status_code=422, detail="VIN must contain 17 valid characters.")
     try:
-        trace("Catalog lookup", "solocatalog_mcp", "started", f"Calling {tool}", {"mode": payload.mode, "vin": payload.vin, "arguments": args})
-        result = await solo_call(tool, args)
-        trace("Catalog lookup", "solocatalog_mcp", "success", f"{tool} returned data", {"mode": payload.mode, "vin": payload.vin, "tool": tool, "result": result["data"]})
-        return {"status": "success", "mode": payload.mode, "vin": payload.vin, "source": "solocatalog_mcp", "result": result["data"], "is_demo_data": False}
-    except Exception as exc:
-        trace("Catalog lookup", "solocatalog_mcp", "error", str(exc)[:300], {"mode": payload.mode, "vin": payload.vin, "tool": tool})
-        raise HTTPException(status_code=502, detail={"provider": "solocatalog_mcp", "status": "unavailable", "message": str(exc)[:300]}) from exc
+        result = await adapter.lookup(
+            vin, payload.mode, payload.q, payload.lang, payload.group_id
+        )
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "success", "TradeSoft catalogue request completed", {
+            "mode": payload.mode, "vin": vin, "has_query": bool(payload.q), "has_group_id": payload.group_id is not None,
+        })
+        return {
+            "status": "success",
+            "mode": payload.mode,
+            "vin": vin,
+            "source": "tradesoft_parts_catalogs",
+            "result": result,
+            "is_demo_data": False,
+        }
+    except TradesoftError as exc:
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", exc.code, exc.message, {
+            "mode": payload.mode, "vin": vin, "http_status": exc.status_code,
+        })
+        raise HTTPException(status_code=502, detail={
+            "provider": "tradesoft_parts_catalogs", "status": exc.code, "message": exc.message,
+        }) from exc
