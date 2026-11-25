@@ -179,6 +179,13 @@ async def home():
     return {"name": "AI Manager Catalog API", "version": APP_VERSION, "docs": "/docs"}
 
 
+@app.on_event("startup")
+async def verify_analytics_database_on_startup():
+    result = await asyncio.to_thread(analytics.database_health)
+    # Emit only the status and exception class; never log DATABASE_URL or connection details.
+    print(f"AI_MANAGER_ANALYTICS_DATABASE={result.get('status')} ERROR_TYPE={result.get('error_type', 'none')}")
+
+
 @app.get("/health")
 async def health():
     database = await asyncio.to_thread(analytics.database_health)
