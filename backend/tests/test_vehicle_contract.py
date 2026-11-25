@@ -63,6 +63,22 @@ class VehicleContractTests(unittest.TestCase):
         )
         self.assertNotIn("*", cors.kwargs["allow_origins"])
 
+    def test_catalogue_lookup_preserves_ambiguous_provider_status(self):
+        class AmbiguousAdapter:
+            async def lookup(self, *args, **kwargs):
+                return {"status": "ambiguous", "candidates": [{"catalogId": 1}, {"catalogId": 2}]}
+
+        previous = main.TRADESOFT_ADAPTER
+        try:
+            main.TRADESOFT_ADAPTER = AmbiguousAdapter()
+            result = asyncio.run(main.catalogue_lookup(
+                main.LookupRequest(vin="WF0UXXGAJUAP34719", mode="groups")
+            ))
+            self.assertEqual(result["status"], "ambiguous")
+            self.assertEqual(result["result"]["status"], "ambiguous")
+        finally:
+            main.TRADESOFT_ADAPTER = previous
+
     def test_admin_trace_endpoint_requires_configured_token(self):
         previous = main.ADMIN_API_TOKEN
         try:
