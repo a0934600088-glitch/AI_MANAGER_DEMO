@@ -230,7 +230,7 @@ def _authorize_admin(x_admin_token: str | None):
 
 @app.post("/api/analytics/events")
 async def analytics_event(payload: AnalyticsEventRequest, x_conversation_id: str | None = Header(default=None, alias="X-Conversation-ID")):
-    allowed = {"chat_message", "selection_success", "selection_failed", "conversation_started", "conversation_ended"}
+    allowed = {"chat_message", "selection_success", "selection_failed", "vehicle_confirmed", "conversation_started", "conversation_ended"}
     if payload.event_type not in allowed:
         raise HTTPException(status_code=422, detail="Unsupported analytics event type.")
     conversation_id = payload.conversation_id or x_conversation_id
