@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app import analytics
+
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
@@ -46,7 +48,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token"],
+    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "X-Conversation-ID"],
 )
 
 
@@ -66,12 +68,39 @@ class LookupRequest(BaseModel):
     lang: Literal["en", "uk", "az", "ru"] = "ru"
 
 
+class AnalyticsEventRequest(BaseModel):
+    event_type: str = Field(min_length=2, max_length=80)
+    conversation_id: str | None = Field(default=None, max_length=100)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class TranslationRequest(BaseModel):
     texts: list[str] = Field(min_length=1, max_length=30)
     source: str = Field(default="auto", min_length=2, max_length=8)
     target: str = Field(min_length=2, max_length=8)
     domain: Literal["general", "automotive"] = "general"
 
+
+
+@app.middleware("http")
+async def analytics_request_middleware(request, call_next):
+    started = asyncio.get_running_loop().time()
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/admin/") and path != "/api/analytics/events":
+        duration = (asyncio.get_running_loop().time() - started) * 1000
+        event_type = "vin_decode" if path.endswith("/vehicles/decode") else ("parts_lookup" if path.endswith("/lookup") else "http_request")
+        try:
+            await asyncio.to_thread(
+                analytics.record_event, event_type,
+                conversation_id=request.headers.get("X-Conversation-ID"),
+                route=path, method=request.method, status_code=response.status_code,
+                duration_ms=duration,
+                metadata={"provider": "tradesoft_parts_catalogs" if "catalog" in path else "backend"},
+            )
+        except Exception:
+            pass
+    return response
 
 TRACE_EVENTS = deque(maxlen=250)
 _VIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])", re.IGNORECASE)
@@ -189,6 +218,50 @@ async def admin_traces(x_admin_token: str | None = Header(default=None, alias="X
         "retained": len(TRACE_EVENTS),
         "retention": "in-memory; cleared on process restart",
     }
+
+
+
+def _authorize_admin(x_admin_token: str | None):
+    if not ADMIN_API_TOKEN:
+        raise HTTPException(status_code=503, detail="Admin analytics is disabled until ADMIN_API_TOKEN is configured.")
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_API_TOKEN):
+        raise HTTPException(status_code=401, detail="Admin authentication required.")
+
+
+@app.post("/api/analytics/events")
+async def analytics_event(payload: AnalyticsEventRequest, x_conversation_id: str | None = Header(default=None, alias="X-Conversation-ID")):
+    allowed = {"chat_message", "selection_success", "selection_failed", "conversation_started", "conversation_ended"}
+    if payload.event_type not in allowed:
+        raise HTTPException(status_code=422, detail="Unsupported analytics event type.")
+    conversation_id = payload.conversation_id or x_conversation_id
+    try:
+        await asyncio.to_thread(analytics.record_event, payload.event_type, conversation_id=conversation_id, metadata=payload.metadata)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics storage is unavailable.") from exc
+    return {"status": "recorded"}
+
+
+@app.get("/api/admin/analytics")
+async def admin_analytics(days: int = 30, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    _authorize_admin(x_admin_token)
+    if days not in {7, 30, 90}:
+        raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    try:
+        return await asyncio.to_thread(analytics.dashboard_summary, days)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
+
+
+@app.get("/api/admin/conversations")
+async def admin_conversations(days: int = 30, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    _authorize_admin(x_admin_token)
+    if days not in {7, 30, 90}:
+        raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    try:
+        rows = await asyncio.to_thread(analytics.conversation_summary, days)
+        return {"conversations": rows}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
 
 @app.get("/api/catalog/v1/providers")
