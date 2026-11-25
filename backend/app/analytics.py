@@ -76,6 +76,7 @@ def dashboard_summary(days: int = 30) -> dict:
                    COUNT(*) FILTER (WHERE event_type = 'vin_decode') AS vin_decodes,
                    COUNT(*) FILTER (WHERE event_type = 'parts_lookup') AS parts_lookups,
                    COUNT(*) FILTER (WHERE event_type = 'selection_success') AS successful_selections,
+                   COUNT(*) FILTER (WHERE event_type = 'vehicle_confirmed') AS vehicle_confirmations,
                    COUNT(*) FILTER (WHERE status_code >= 400) AS errors,
                    COALESCE(AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL), 0) AS avg_duration_ms
             FROM ai_manager_analytics_events
