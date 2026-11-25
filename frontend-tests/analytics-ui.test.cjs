@@ -20,8 +20,13 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
   assert.match(chat, /trackEvent\('vehicle_confirmed'/);
+  assert.match(chat, /catalogVerified=!!d\?\.is_oem_catalog_verified/);
+  assert.match(chat, /if\(!catalogVerified\)/);
+  assert.match(chat, /href="admin.html"/);
   assert.match(analytics, /_SAFE_METADATA/);
   assert.match(analytics, /def _clean_metadata/);
+  assert.match(analytics, /def database_health/);
+  assert.match(analytics, /event_type='catalog_request'/);
 });
 
 test('analytics dashboard is separate and protected', () => {
@@ -30,6 +35,9 @@ test('analytics dashboard is separate and protected', () => {
   assert.match(admin, /Authorization/);
   assert.match(backend, /@app.get\("\/api\/admin\/analytics"\)/);
   assert.match(backend, /def _authorize_admin/);
+  assert.match(backend, /SoloCatalogMCPAdapter/);
+  assert.match(backend, /NHTSAVPICAdapter/);
+  assert.match(backend, /catalog_results/);
 });
 
 test('unavailable sales and AI metrics are explicitly marked rather than fabricated', () => {
