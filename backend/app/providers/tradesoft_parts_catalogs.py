@@ -124,7 +124,7 @@ class TradesoftPartsCatalogsAdapter:
     async def lookup(
         self,
         identifier: str,
-        mode: Literal["parts", "diagrams", "diagram", "models"] = "parts",
+        mode: Literal["parts", "diagrams", "diagram", "groups", "models"] = "parts",
         query: str | None = None,
         lang: str = "en",
         group_id: str | int | None = None,
@@ -148,6 +148,13 @@ class TradesoftPartsCatalogsAdapter:
 
         if mode == "models":
             return {"vehicle": car, "catalogue": await self._get("/catalogs/", lang=lang)}
+
+        if mode == "groups":
+            params = dict(base_params)
+            if group_id is not None:
+                params["groupId"] = group_id
+            groups = await self._get(f"/catalogs/{catalog_id}/groups2/", params, lang)
+            return {"vehicle": car, "catalogId": catalog_id, "carId": car_id, "criteria": criteria, "groups": groups}
 
         if mode == "diagrams" or mode == "diagram":
             schemas = await self._get(f"/catalogs/{catalog_id}/schemas", base_params, lang)
