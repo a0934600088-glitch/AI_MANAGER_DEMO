@@ -12,17 +12,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from app.language import translate_texts, language_catalog
+from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
 APP_VERSION = "2.2.0"
 SOLOCATALOG_MCP_URL = os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp")
 NHTSA_BASE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles"
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
+TRADESOFT_API_TOKEN = os.getenv("TRADESOFT_API_TOKEN", "").strip()
+TRADESOFT_ENABLED = os.getenv("TRADESOFT_ENABLED", "false").strip().lower() == "true" and bool(TRADESOFT_API_TOKEN)
+TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 app = FastAPI(
     title="AI Manager Catalog API",
     version=APP_VERSION,
-    description="Live public catalog integrations: SoloCatalog MCP and NHTSA vPIC VIN decoding.",
+    description="Catalog integrations: SoloCatalog MCP, NHTSA vPIC and optional TradeSoft OEM Parts.Catalogs.",
 )
 
 allowed_origins = [
@@ -186,6 +190,7 @@ async def health():
             {"id": "argos_translate", "type": "translation", "auth": "open-source self-hosted models", "enabled": True},
             {"id": "solocatalog_mcp", "type": "parts_catalog", "auth": "no-key light-use allowance", "enabled": True},
             {"id": "nhtsa_vpic", "type": "vin_decoder", "auth": "public", "enabled": True},
+            {"id": "tradesoft_parts_catalogs", "type": "oem_vehicle_catalog", "auth": "server environment token", "enabled": TRADESOFT_ENABLED},
         ],
         "provider_limit_per_tenant": 10,
         "note": "Health confirms this adapter is running; provider reachability is tested on actual requests.",
@@ -230,12 +235,12 @@ async def admin_traces():
 async def providers():
     return {
         "limit": 10,
-        "configured": 2,
+        "configured": 2 + int(TRADESOFT_ENABLED),
         "providers": [
             {"id": "solocatalog_mcp", "name": "SoloCatalog", "kind": "parts_catalog", "capabilities": ["vin_decode", "parts_search", "diagrams", "diagram_parts", "oem_lookup"], "authentication": "No key for small daily MCP allowance"},
             {"id": "nhtsa_vpic", "name": "NHTSA vPIC", "kind": "vin_decoder", "capabilities": ["vin_decode"], "authentication": "Public, no key", "catalog": False},
-        ],
-        "not_configured": ["RockAuto unofficial integration", "Parts-Catalogs / Tradesoft"],
+        ] + ([{"id": "tradesoft_parts_catalogs", "name": "TradeSoft Parts.Catalogs", "kind": "oem_vehicle_catalog", "capabilities": ["vin_decode", "frame_decode"], "authentication": "Server environment token"}] if TRADESOFT_ENABLED else []),
+        "not_configured": ["RockAuto unofficial integration"] + ([] if TRADESOFT_ENABLED else ["Parts-Catalogs / Tradesoft"]),
     }
 
 
@@ -268,7 +273,18 @@ async def decode_vehicle(payload: DecodeRequest):
         primary = next((r.get("data") for r in results if r["provider"] == "nhtsa_vpic" and r["status"] == "success"), None)
     if not primary:
         raise HTTPException(status_code=502, detail={"message": "All VIN providers failed", "providers": results})
-    return {"vin": vin, "vehicle": primary, "providers": results, "is_oem_catalog_verified": any(r["provider"] == "solocatalog_mcp" and r["status"] == "success" for r in results)}
+    if TRADESOFT_ADAPTER:
+        try:
+            candidates = await TRADESOFT_ADAPTER.decode(vin, "vin")
+            results.append(_provider_result("tradesoft_parts_catalogs", "success", candidates))
+            trace("VIN decode", "tradesoft_parts_catalogs", "success", "TradeSoft OEM VIN request completed", {"vin": vin, "candidate_count": len(candidates)})
+        except TradesoftError as exc:
+            results.append(_provider_result("tradesoft_parts_catalogs", exc.code, error=exc.message))
+            trace("VIN decode", "tradesoft_parts_catalogs", exc.code, "TradeSoft OEM VIN request failed", {"vin": vin, "http_status": exc.status_code})
+    tradesoft_data = next((r.get("data") for r in results if r["provider"] == "tradesoft_parts_catalogs" and r["status"] == "success" and r.get("data")), None)
+    if tradesoft_data:
+        primary = tradesoft_data[0] if len(tradesoft_data) == 1 else {"candidates": tradesoft_data, "status": "ambiguous"}
+    return {"vin": vin, "vehicle": primary, "providers": results, "is_oem_catalog_verified": bool(tradesoft_data)}
 
 
 @app.post("/api/catalog/v1/lookup")
