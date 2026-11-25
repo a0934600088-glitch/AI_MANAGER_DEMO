@@ -6,21 +6,30 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+from app import analytics
 
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
 
-APP_VERSION = "2.4.10"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as version_file:
+    APP_VERSION = version_file.read().strip()
+if not APP_VERSION:
+    raise RuntimeError("backend/VERSION must contain the release version")
+
 TIMEOUT_SECONDS = float(os.getenv("CATALOG_TIMEOUT_SECONDS", "25"))
 TRADESOFT_API_TOKEN = os.getenv("TRADESOFT_API_TOKEN", "").strip()
 TRADESOFT_ENABLED = os.getenv("TRADESOFT_ENABLED", "false").strip().lower() == "true" and bool(TRADESOFT_API_TOKEN)
-ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "").strip()
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+admin_auth = HTTPBasic(auto_error=False)
 TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 app = FastAPI(
     title="AI Manager Catalog API",
@@ -46,7 +55,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token"],
+    allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-Conversation-ID"],
 )
 
 
@@ -66,12 +75,39 @@ class LookupRequest(BaseModel):
     lang: Literal["en", "uk", "az", "ru"] = "ru"
 
 
+class AnalyticsEventRequest(BaseModel):
+    event_type: str = Field(min_length=2, max_length=80)
+    conversation_id: str | None = Field(default=None, max_length=100)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class TranslationRequest(BaseModel):
     texts: list[str] = Field(min_length=1, max_length=30)
     source: str = Field(default="auto", min_length=2, max_length=8)
     target: str = Field(min_length=2, max_length=8)
     domain: Literal["general", "automotive"] = "general"
 
+
+
+@app.middleware("http")
+async def analytics_request_middleware(request, call_next):
+    started = asyncio.get_running_loop().time()
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/admin/") and path != "/api/analytics/events":
+        duration = (asyncio.get_running_loop().time() - started) * 1000
+        event_type = "vin_decode" if path.endswith("/vehicles/decode") else ("parts_lookup" if path.endswith("/lookup") else "http_request")
+        try:
+            await asyncio.to_thread(
+                analytics.record_event, event_type,
+                conversation_id=request.headers.get("X-Conversation-ID"),
+                route=path, method=request.method, status_code=response.status_code,
+                duration_ms=duration,
+                metadata={"provider": "tradesoft_parts_catalogs" if "catalog" in path else "backend"},
+            )
+        except Exception:
+            pass
+    return response
 
 TRACE_EVENTS = deque(maxlen=250)
 _VIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])", re.IGNORECASE)
@@ -175,20 +211,73 @@ async def language_translate(payload: TranslationRequest):
         }) from exc
 
 
-@app.get("/api/admin/traces")
-async def admin_traces(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
-    if not ADMIN_API_TOKEN:
+def _authorize_admin(credentials: HTTPBasicCredentials | None):
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         raise HTTPException(
             status_code=503,
-            detail="Admin trace access is disabled until ADMIN_API_TOKEN is configured.",
+            detail="Admin access is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD on the backend.",
         )
-    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_API_TOKEN):
-        raise HTTPException(status_code=401, detail="Admin authentication required.")
+    valid = bool(
+        credentials
+        and secrets.compare_digest(credentials.username, ADMIN_USERNAME)
+        and secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+    )
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Administrator login required.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
+@app.get("/api/admin/traces")
+async def admin_traces(credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
     return {
         "events": list(TRACE_EVENTS),
         "retained": len(TRACE_EVENTS),
         "retention": "in-memory; cleared on process restart",
     }
+
+
+
+
+
+
+@app.post("/api/analytics/events")
+async def analytics_event(payload: AnalyticsEventRequest, x_conversation_id: str | None = Header(default=None, alias="X-Conversation-ID")):
+    allowed = {"chat_message", "selection_success", "selection_failed", "vehicle_confirmed", "conversation_started", "conversation_ended"}
+    if payload.event_type not in allowed:
+        raise HTTPException(status_code=422, detail="Unsupported analytics event type.")
+    conversation_id = payload.conversation_id or x_conversation_id
+    try:
+        await asyncio.to_thread(analytics.record_event, payload.event_type, conversation_id=conversation_id, metadata=payload.metadata)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics storage is unavailable.") from exc
+    return {"status": "recorded"}
+
+
+@app.get("/api/admin/analytics")
+async def admin_analytics(days: int = 30, credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
+    if days not in {7, 30, 90}:
+        raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    try:
+        return await asyncio.to_thread(analytics.dashboard_summary, days)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
+
+
+@app.get("/api/admin/conversations")
+async def admin_conversations(days: int = 30, credentials: HTTPBasicCredentials | None = Depends(admin_auth)):
+    _authorize_admin(credentials)
+    if days not in {7, 30, 90}:
+        raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    try:
+        rows = await asyncio.to_thread(analytics.conversation_summary, days)
+        return {"conversations": rows}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
 
 @app.get("/api/catalog/v1/providers")
