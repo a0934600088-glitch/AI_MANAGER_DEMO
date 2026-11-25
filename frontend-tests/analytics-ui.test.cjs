@@ -35,4 +35,6 @@ test('frontend release labels are populated from the backend version endpoint', 
   assert.match(chat, /api\('\/health'\)/);
   assert.match(backend, /VERSION/);
   assert.match(version, /^\d+\.\d+\.\d+$/);
+  assert.doesNotMatch(chat, /v\d+\.\d+\.\d+/);
+  assert.doesNotMatch(admin, /v\d+\.\d+\.\d+/);
 });
