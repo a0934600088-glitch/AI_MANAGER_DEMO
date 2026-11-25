@@ -42,6 +42,12 @@ test('translated display fields are not normalized a second time', () => {
   assert.match(html, /showVehicle\(\{normalizedFields:displayVehicleFields\}\)/);
 });
 
+test('document title and visible header use the same release version', () => {
+  assert.match(html, /<title>AI Manager 2\\.4\\.9<\\/title>/);
+  assert.match(html, /class="muted">v2\\.4\\.9<\\/span>/);
+  assert.doesNotMatch(html, /2\\.4\\.8/);
+});
+
 test('VIN input normalization removes spaces and hyphens before lookup', () => {
   assert.ok(html.includes("const clean=v.replace(/[\\s-]/g,'').toUpperCase();"));
 });
