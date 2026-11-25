@@ -79,3 +79,15 @@ A successful health check confirms only that the FastAPI process is running. A s
 - `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
 - Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
+
+
+## Admin analytics (demo)
+
+- `GET /api/admin/analytics?days=7|30|90` — request, conversation, message, VIN decode, lookup, error and latency aggregates.
+- `GET /api/admin/conversations?days=7|30|90` — per-conversation activity and elapsed duration.
+- `POST /api/analytics/events` — customer-chat lifecycle and message events; the browser sends a non-sensitive conversation ID.
+- `admin.html` — separate static administrator dashboard. It calls the Railway API and requires the server-side `ADMIN_API_TOKEN`.
+- Analytics are persisted in PostgreSQL table `ai_manager_analytics_events`; `psycopg[binary]` is required.
+- If `DATABASE_URL` is missing or PostgreSQL is unavailable, analytics endpoints return HTTP 503 and customer chat requests continue without being blocked.
+- Current demo build intentionally records a single `default` tenant. Real per-company isolation must be connected to authenticated tenant identity before multi-tenant production; the API does not trust a browser-supplied tenant ID.
+- A vehicle confirmation is counted separately from a successful parts selection. A confirmed compatible part must only be counted after the actual part-selection/fitment UI emits `selection_success`.
