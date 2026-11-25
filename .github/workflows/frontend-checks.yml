@@ -30,7 +30,7 @@ jobs:
           Path("/tmp/ai-manager-inline.js").write_text("\n".join(inline), encoding="utf-8")
           admin = Path("admin.html").read_text(encoding="utf-8")
           admin_scripts = re.findall(r"<script\b[^>]*>(.*?)</script\s*>", admin, flags=re.S | re.I)
-          Path("/tmp/ai-manager-admin.js").write_text("\\n".join(admin_scripts), encoding="utf-8")
+          Path("/tmp/ai-manager-admin.js").write_text("\n".join(admin_scripts), encoding="utf-8")
           PY
           node --check /tmp/ai-manager-inline.js
           node --check /tmp/ai-manager-admin.js
