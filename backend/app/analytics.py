@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
 import psycopg
+
+_SCHEMA_READY = False
 from psycopg.rows import dict_row
 
 def _dsn() -> str:
@@ -28,6 +30,9 @@ def _connect():
     return psycopg.connect(_dsn(), row_factory=dict_row, connect_timeout=5)
 
 def ensure_schema() -> None:
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
     with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS ai_manager_analytics_events (
@@ -45,6 +50,7 @@ def ensure_schema() -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS ix_ai_analytics_tenant_time ON ai_manager_analytics_events (tenant_id, occurred_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_ai_analytics_conversation ON ai_manager_analytics_events (conversation_id)")
+    _SCHEMA_READY = True
 
 def record_event(event_type: str, *, conversation_id: str | None = None,
                  route: str | None = None, method: str | None = None,
