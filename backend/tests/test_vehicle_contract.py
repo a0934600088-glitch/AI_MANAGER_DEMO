@@ -56,6 +56,13 @@ class VehicleContractTests(unittest.TestCase):
         self.assertNotIn(vin, serialized)
         self.assertIn("*************4719", serialized)
 
+    def test_cors_configuration_never_uses_wildcard(self):
+        cors = next(
+            middleware for middleware in main.app.user_middleware
+            if middleware.cls.__name__ == "CORSMiddleware"
+        )
+        self.assertNotIn("*", cors.kwargs["allow_origins"])
+
     def test_admin_trace_endpoint_requires_configured_token(self):
         previous = main.ADMIN_API_TOKEN
         try:
