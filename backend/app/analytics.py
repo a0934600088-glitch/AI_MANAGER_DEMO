@@ -118,7 +118,7 @@ def dashboard_summary(days: int = 30) -> dict:
               COUNT(*) FILTER (WHERE event_type='vin_decode') AS vin_decodes,
               COUNT(*) FILTER (WHERE event_type='parts_lookup') AS parts_lookups,
               COUNT(*) FILTER (WHERE event_type='selection_success') AS successful_selections,
-              COUNT(*) FILTER (WHERE event_type='selection_failed') AS failed_selections,
+              COUNT(*) FILTER (WHERE event_type IN ('selection_failed','parts_lookup_failed')) AS failed_selections,
               COUNT(*) FILTER (WHERE event_type='parts_selection_incomplete') AS incomplete_selections,
               COUNT(*) FILTER (WHERE event_type='vehicle_confirmed') AS vehicle_confirmations,
               COUNT(*) FILTER (WHERE status_code >= 400 OR event_type='parts_lookup_failed') AS errors,
