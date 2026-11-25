@@ -41,6 +41,15 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 422)
         record.assert_not_called()
 
+    def test_ai_usage_numeric_strings_are_validated_before_sql_cast(self):
+        safe = analytics._clean_metadata({
+            "tokens_input": "120", "tokens_output": "45", "cost_usd": "0.0025",
+            "model": "test-model", "cost_usd_bad": "not-a-number",
+        })
+        self.assertEqual(safe["tokens_input"], 120.0)
+        self.assertEqual(safe["tokens_output"], 45.0)
+        self.assertEqual(safe["cost_usd"], 0.0025)
+
     def test_metadata_filter_removes_raw_chat_content_and_identifiers(self):
         metadata = {"length": 22, "message": "private text", "vin": "WVWZZZAUZJP594600",
                     "phone": "+380000000000", "language": "uk"}
