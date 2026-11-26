@@ -42,10 +42,13 @@ test('translated display fields are not normalized a second time', () => {
   assert.match(html, /showVehicle\(\{normalizedFields:displayVehicleFields\}\)/);
 });
 
-test('document title and visible header use the same release version', () => {
-  assert.ok(html.includes('<title>AI Manager 2.4.10</title>'));
-  assert.ok(html.includes('class="muted">v2.4.10</span>'));
+test('release version is read from the canonical backend VERSION endpoint', () => {
+  const version = fs.readFileSync(path.join(__dirname, '..', 'backend', 'VERSION'), 'utf8').trim();
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  assert.ok(html.includes('id="appVersion"'));
+  assert.ok(html.includes("api('/health')"));
   assert.ok(!html.includes('2.4.8'));
+  assert.ok(!html.includes('2.4.10'));
 });
 test('VIN input normalization removes spaces and hyphens before lookup', () => {
   assert.ok(html.includes("const clean=v.replace(/[\\s-]/g,'').toUpperCase();"));

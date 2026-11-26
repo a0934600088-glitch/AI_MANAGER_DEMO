@@ -2,6 +2,7 @@ import asyncio
 import unittest
 
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from app import main
 
@@ -79,8 +80,13 @@ class VehicleContractTests(unittest.TestCase):
         previous = main.TRADESOFT_ADAPTER
         try:
             main.TRADESOFT_ADAPTER = AmbiguousAdapter()
+            request = Request({
+                "type": "http", "method": "POST", "scheme": "https", "path": "/",
+                "raw_path": b"/", "query_string": b"", "headers": [],
+                "server": ("localhost", 443), "client": ("127.0.0.1", 1234), "root_path": "",
+            })
             result = asyncio.run(main.catalogue_lookup(
-                main.LookupRequest(vin="WF0UXXGAJUAP34719", mode="groups")
+                main.LookupRequest(vin="WF0UXXGAJUAP34719", mode="groups"), request
             ))
             self.assertEqual(result["status"], "ambiguous")
             self.assertEqual(result["result"]["status"], "ambiguous")
@@ -92,10 +98,10 @@ class VehicleContractTests(unittest.TestCase):
         try:
             main.ADMIN_API_TOKEN = "unit-test-value"
             with self.assertRaises(HTTPException) as missing:
-                asyncio.run(main.admin_traces(None))
+                asyncio.run(main.admin_traces(None, None))
             self.assertEqual(missing.exception.status_code, 401)
 
-            result = asyncio.run(main.admin_traces("unit-test-value"))
+            result = asyncio.run(main.admin_traces(None, "unit-test-value"))
             self.assertIn("events", result)
         finally:
             main.ADMIN_API_TOKEN = previous

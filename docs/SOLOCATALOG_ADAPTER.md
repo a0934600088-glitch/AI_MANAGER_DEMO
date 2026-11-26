@@ -1,48 +1,38 @@
-# SoloCatalog adapter — v2.1.1
+# SoloCatalog secondary OEM adapter — AI Manager 2.4.11
 
-## Purpose
+## Connection
 
-Introduce a provider-specific server adapter without coupling the customer messenger to a catalogue vendor. The first adapter target is SoloCatalog.
+- Streamable HTTP MCP endpoint: `https://solocatalog.com/mcp`
+- Protocol: MCP 2025-03-26
+- Light-use allowance works without a key.
+- Optional API key: `SOLOCATALOG_API_KEY`, sent only from the backend as `Authorization: Bearer <key>`.
+- The API key must never be stored in frontend code, browser storage, query strings or Git.
 
-## Confirmed provider contract
+The adapter performs `initialize`, `tools/list` and `tools/call` per request, reads the live tool schema and sends only arguments accepted by the provider. It supports `decode_vin`, `search_parts`, `find_models`, `list_diagrams` and `get_diagram_parts`.
 
-Based on the provider's published API documentation:
+## AI Manager routes
 
-- Base URL: `https://solocatalog.com/api/v1`
-- Authentication: `Authorization: Bearer <API key>`
-- VIN decode: `POST /vin/decode` with `vin` and optional `lang`
-- Quick lookup: `POST /lookup`
-  - VIN part search: `{"vin":"...","q":"brake"}`
-  - Model candidates: `{"mode":"models","brand":"...","q":"..."}`
-  - Diagrams for VIN: `{"mode":"diagrams","vin":"..."}`
-  - Diagram parts: `{"mode":"diagram","model":"MODEL_KEY","diagram":"FIGURE_ID"}`
-- The provider documents diagram callouts, part rows and image links in its full catalogue operations.
-
-## Adapter endpoints
-
-The FastAPI adapter exposes stable AI Manager-owned routes:
-
-| AI Manager route | Provider operation |
+| AI Manager route | SoloCatalog MCP tool |
 |---|---|
-| `POST /api/catalog/v1/vehicles/decode` | `POST /vin/decode` |
-| `POST /api/catalog/v1/lookup` | `POST /lookup` |
-| `GET /health` | Local adapter configuration only |
+| `POST /api/catalog/v1/vehicles/decode` | `decode_vin` |
+| `POST /api/catalog/v1/lookup` with `mode=parts` | `search_parts` |
+| `POST /api/catalog/v1/lookup` with `mode=models` | `find_models` |
+| `POST /api/catalog/v1/lookup` with `mode=diagrams` | `list_diagrams` |
+| `POST /api/catalog/v1/lookup` with `mode=diagram` | `get_diagram_parts` |
 
-Provider-specific model keys and figure IDs are passed through unchanged. They are opaque identifiers and must not be guessed or regenerated.
+SoloCatalog does not receive TradeSoft `groupId` values: provider identifiers are not interchangeable. Group navigation and group-part retrieval remain on TradeSoft until an explicit mapping exists.
 
-## Required next engineering steps
+## Fitment and fallback rules
 
-1. Deploy `backend/` to a server runtime; GitHub Pages cannot run FastAPI.
-2. Add `SOLOCATALOG_API_KEY` to the host's secret manager, never to frontend code or Git.
-3. Connect the frontend to the deployed AI Manager API origin.
-4. Test a supported VIN end-to-end and inspect the real JSON for vehicle, diagram, callout, part and image fields.
-5. Only then define a canonical internal schema and persist data if the provider agreement permits it.
-6. Verify written permission for commercial SaaS display, multi-tenant use, retention and image delivery.
+- SoloCatalog is queried in parallel with TradeSoft for supported operations.
+- TradeSoft remains the preferred primary source when it returns a single verified catalogue vehicle.
+- If TradeSoft is unavailable, SoloCatalog may supply the OEM catalogue result.
+- A VIN-only decode from NHTSA never proves parts fitment.
+- Catalogue candidates must not be silently merged when they conflict.
+- Keep provider identity, result, status and latency separate in the API response and admin analytics.
 
-## Explicit non-goals in v2.1.1
+## Commercial and rate limits
 
-- No live provider key is included.
-- No API call is made by the GitHub Pages demo.
-- No backend service is deployed by the Pages workflow.
-- No real vehicle compatibility or OEM fitment is asserted.
-- No catalogue bulk import or public caching is implemented.
+SoloCatalog documents a small free daily allowance for light MCP use and an optional API key for higher use. Sustained commercial SaaS traffic requires the correct provider plan and written confirmation of commercial display, multi-tenant use, retention and image-delivery rights. Do not assume the no-key allowance is sufficient for production volume.
+
+Official docs: https://solocatalog.com/api-docs.html
