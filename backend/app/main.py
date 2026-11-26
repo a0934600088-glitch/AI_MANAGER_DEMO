@@ -616,7 +616,7 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
     usable = [x for x in results if x.get("status") == "success" and x.get("result") is not None]
     if trade["status"] == "ambiguous":
         return {"status": "ambiguous", "mode": payload.mode, "vin": vin,
-                "providers": results, "catalog_results": results,
+                "result": trade.get("result"), "providers": results, "catalog_results": results,
                 "source": "tradesoft_parts_catalogs", "is_demo_data": False}
     if not usable:
         raise HTTPException(status_code=502, detail={
