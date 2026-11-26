@@ -20,7 +20,7 @@ const UK={
 'Двигатель':'Двигун','Код двигателя':'Код двигуна','Объём двигателя':'Об’єм двигуна','Топливо':'Паливо',
 'Трансмиссия':'Трансмісія','Кузов':'Кузов','Тип кузова':'Тип кузова','Рынок':'Ринок','Дата производства':'Дата виробництва',
 'Период производства':'Період виробництва','Цвет кузова':'Колір кузова','Цвет салона':'Колір салону','Серия':'Серія',
-'Административная аналитика':'Адміністративна аналітика','PostgreSQL: проверка…':'PostgreSQL: перевірка…',
+'Административная аналитика':'Адміністративна аналітика','PostgreSQL: проверка…':'PostgreSQL: перевірка…','PostgreSQL: подключена':'PostgreSQL: підключена','PostgreSQL: недоступна':'PostgreSQL: недоступна',
 'Каталоги: проверка…':'Каталоги: перевірка…','Логин администратора (admin для старого ключа)':'Логін адміністратора (admin для старого ключа)',
 'Пароль администратора':'Пароль адміністратора','7 дней':'7 днів','30 дней':'30 днів','90 дней':'90 днів',
 'Обновить':'Оновити','Введите учётные данные администратора. Если ADMIN_USERNAME и ADMIN_PASSWORD не заданы, используйте логин admin и существующий ADMIN_API_TOKEN как пароль. Этот раздел отдельный от клиентского чата.':'Введіть облікові дані адміністратора. Якщо ADMIN_USERNAME і ADMIN_PASSWORD не задані, використовуйте логін admin і наявний ADMIN_API_TOKEN як пароль. Цей розділ окремий від чату клієнта.',
@@ -44,7 +44,7 @@ const UK={
 'Входные токены':'Вхідні токени','Выходные токены':'Вихідні токени','Расход AI':'Витрати AI',
 'Учёт токенов и расходов AI не подключён':'Облік токенів і витрат AI не підключено','Время':'Час','Сессия':'Сесія',
 'Событие':'Подія','Маршрут':'Маршрут','мс':'мс','Данные загружены':'Дані завантажено','период':'період',
-'Ошибка:':'Помилка:','подключена':'підключена','недоступна':'недоступна','Настроенные источники:':'Налаштовані джерела:',
+'Ошибка:':'Помилка:','подключена':'підключена','недоступна':'недоступна','Настроенные источники:':'Налаштовані джерела:','Настроенные источники: нет':'Налаштовані джерела: немає',
 'нет':'немає','backend недоступен':'backend недоступний','Make':'Марка'
 };
 const norm=s=>String(s).replace(/\s+/g,' ').trim();
@@ -54,16 +54,16 @@ function apply(root,lang){
  const dict=lang==='uk'?UK:RU;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
- nodes.forEach(node=>{const old=norm(node.nodeValue);if(Object.prototype.hasOwnProperty.call(dict,old))node.nodeValue=node.nodeValue.replace(old,dict[old]);});
+ nodes.forEach(node=>{if(node.parentElement?.closest('.messages,.msg'))return;const old=norm(node.nodeValue);if(Object.prototype.hasOwnProperty.call(dict,old))node.nodeValue=node.nodeValue.replace(old,dict[old]);});
  const attrs=['placeholder','title','aria-label'];
- root.querySelectorAll?.('*').forEach(el=>attrs.forEach(attr=>{const val=el.getAttribute(attr);if(val&&Object.prototype.hasOwnProperty.call(dict,norm(val)))el.setAttribute(attr,dict[norm(val)]);}));
+ root.querySelectorAll?.('*').forEach(el=>{if(el.closest('.messages,.msg'))return;attrs.forEach(attr=>{const val=el.getAttribute(attr);if(val&&Object.prototype.hasOwnProperty.call(dict,norm(val)))el.setAttribute(attr,dict[norm(val)]);});});
 }
 function preferred(){const saved=localStorage.getItem('ai-manager-ui-language');if(saved==='ru'||saved==='uk')return saved;return (navigator.language||'').toLowerCase().startsWith('uk')?'uk':'ru';}
 let observer=null;
 function watch(lang){
  if(observer)observer.disconnect();
  observer=new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{
-  if(node.nodeType===Node.ELEMENT_NODE)apply(node,lang);
+  if(node.nodeType===Node.ELEMENT_NODE&&!node.matches('.messages,.msg')&&!node.closest('.messages,.msg'))apply(node,lang);
   else if(node.nodeType===Node.TEXT_NODE){
    const key=norm(node.nodeValue),RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru])),dict=lang==='uk'?UK:RU;
    if(Object.prototype.hasOwnProperty.call(dict,key))node.nodeValue=node.nodeValue.replace(key,dict[key]);
