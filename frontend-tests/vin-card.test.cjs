@@ -141,3 +141,17 @@ test('VIN card keeps the engine type value from the supplied TradeSoft template'
   assert.match(collect, /engine_info:'Тип двигателя'/);
   assert.match(collect, /engine:'Код двигателя'/);
 });
+
+test('customer part request searches TradeSoft schemas directly without exposing the catalogue root tree', () => {
+  assert.match(html, /async function searchCatalogForRequest\(query\)[\s\S]*?await lookup\('parts',query\)/);
+  assert.match(html, /renderCatalogSchemas\(d\.result,pendingPartQuery\|\|q\)/);
+  assert.match(html, /async function lookup\(mode,q,groupId\)/);
+  assert.match(html, /groupId\(schemas\[0\]\)/);
+  assert.doesNotMatch(html.slice(html.indexOf('async function searchCatalogForRequest'), html.indexOf('function renderCatalogParts')), /renderCatalogGroupSuggestions/);
+});
+test('TradeSoft diagram supports zoom and callout-to-OE selection', () => {
+  assert.match(html, /Увеличить схему/);
+  assert.match(html, /Уменьшить схему/);
+  assert.match(html, /position\.number\?\?position\.positionNumber/);
+  assert.match(html, /оригинальный номер/);
+});
