@@ -22,6 +22,8 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /trackEvent\('vehicle_confirmed'/);
   assert.match(chat, /catalogVerified=!!d\?\.is_oem_catalog_verified/);
   assert.match(chat, /if\(!catalogVerified\)/);
+  assert.match(chat, /d\.catalog_results/);
+  assert.match(chat, /TradeSoft OEM/);
   assert.match(chat, /href="admin.html"/);
   assert.match(analytics, /_SAFE_METADATA/);
   assert.match(analytics, /def _clean_metadata/);
