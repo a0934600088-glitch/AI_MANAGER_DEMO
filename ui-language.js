@@ -33,7 +33,7 @@ const UK={
 'Нет данных за выбранный период':'Немає даних за вибраний період','Введите логин и пароль администратора.':'Введіть логін і пароль адміністратора.',
 'Загрузка…':'Завантаження…','Неверные учётные данные администратора.':'Неправильні облікові дані адміністратора.',
 'Успешные подборы':'Успішні підбори','Не собираются':'Не збираються','Нет данных':'Немає даних',
-'Запросы':'Запити','Диалоги':'Діалоги','Сообщения':'Повідомлення','Анонимные клиентские сессии':'Анонімні сесії клієнтів',
+'Запросы':'Запити','Диалоги':'Діалоги','Сообщения':'Повідомлення клієнтів','Анонимные клиентские сессии':'Анонімні сесії клієнтів',
 'VIN-декодирования':'VIN-декодування','Запросы подбора':'Запити підбору','Ошибки':'Помилки','Среднее время API':'Середній час API',
 'Дата':'Дата','Тип / маршрут':'Тип / маршрут','Каталог':'Каталог','Операция':'Операція','Вызовы':'Виклики',
 'Среднее, мс':'Середнє, мс','Этап':'Етап','Количество':'Кількість','Запросы':'Запити','Начат подбор':'Підбір розпочато',
@@ -45,16 +45,24 @@ const UK={
 'Учёт токенов и расходов AI не подключён':'Облік токенів і витрат AI не підключено','Время':'Час','Сессия':'Сесія',
 'Событие':'Подія','Маршрут':'Маршрут','мс':'мс','Данные загружены':'Дані завантажено','период':'період',
 'Ошибка:':'Помилка:','подключена':'підключена','недоступна':'недоступна','Настроенные источники:':'Налаштовані джерела:','Настроенные источники: нет':'Налаштовані джерела: немає',
-'нет':'немає','backend недоступен':'backend недоступний','Make':'Марка'
+'нет':'немає','backend недоступен':'backend недоступний','Make':'Марка','Мова інтерфейсу':'Язык интерфейса','Уровень звука микрофона':'Рівень звуку мікрофона','/ Административная аналитика /':'/ Адміністративна аналітика /','· временно недоступен':'· тимчасово недоступний'
 };
 const norm=s=>String(s).replace(/\s+/g,' ').trim();
+function translateValue(value,lang){
+ const RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru])),dict=lang==='uk'?UK:RU,key=norm(value);
+ if(Object.prototype.hasOwnProperty.call(dict,key))return dict[key];
+ if(lang==='uk'){
+  return String(value).replace('Данные загружены','Дані завантажено').replace('Ошибка:','Помилка:').replace('Статус подключения:','Стан підключення:').replace('Настроенные источники:','Налаштовані джерела:').replace(' подключена',' підключена').replace(' недоступна',' недоступна').replace(' дней',' днів');
+ }
+ return String(value).replace('Дані завантажено','Данные загружены').replace('Помилка:','Ошибка:').replace('Стан підключення:','Статус подключения:').replace('Налаштовані джерела:','Настроенные источники:').replace(' днів',' дней');
+}
 function apply(root,lang){
  if(!root||lang!=='ru'&&lang!=='uk')return;
  const RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru]));
  const dict=lang==='uk'?UK:RU;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
- nodes.forEach(node=>{if(node.parentElement?.closest('.messages,.msg'))return;const old=norm(node.nodeValue);if(Object.prototype.hasOwnProperty.call(dict,old))node.nodeValue=node.nodeValue.replace(old,dict[old]);});
+ nodes.forEach(node=>{if(node.parentElement?.closest('.messages,.msg'))return;const translated=translateValue(node.nodeValue,lang);if(translated!==node.nodeValue)node.nodeValue=translated;});
  const attrs=['placeholder','title','aria-label'];
  root.querySelectorAll?.('*').forEach(el=>{if(el.closest('.messages,.msg'))return;attrs.forEach(attr=>{const val=el.getAttribute(attr);if(val&&Object.prototype.hasOwnProperty.call(dict,norm(val)))el.setAttribute(attr,dict[norm(val)]);});});
 }
@@ -64,10 +72,7 @@ function watch(lang){
  if(observer)observer.disconnect();
  observer=new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{
   if(node.nodeType===Node.ELEMENT_NODE&&!node.matches('.messages,.msg')&&!node.closest('.messages,.msg'))apply(node,lang);
-  else if(node.nodeType===Node.TEXT_NODE){
-   const key=norm(node.nodeValue),RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru])),dict=lang==='uk'?UK:RU;
-   if(Object.prototype.hasOwnProperty.call(dict,key))node.nodeValue=node.nodeValue.replace(key,dict[key]);
-  }
+  else if(node.nodeType===Node.TEXT_NODE&&!node.parentElement?.closest('.messages,.msg'))node.nodeValue=translateValue(node.nodeValue,lang);
  })));
  observer.observe(document.body,{childList:true,subtree:true});
 }
