@@ -24,6 +24,7 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /if\(!catalogVerified\)/);
   assert.match(chat, /d\.catalog_results/);
   assert.match(chat, /TradeSoft OEM/);
+  assert.doesNotMatch(chat, /SoloCatalog|NHTSA|solocatalog|nhtsa/i);
   assert.match(chat, /href="admin.html"/);
   assert.match(analytics, /_SAFE_METADATA/);
   assert.match(analytics, /def _clean_metadata/);
@@ -40,9 +41,9 @@ test('analytics dashboard is separate and protected', () => {
   assert.match(admin, /analytics_database/);
   assert.match(backend, /@app.get\("\/api\/admin\/analytics"\)/);
   assert.match(backend, /def _authorize_admin/);
-  assert.match(backend, /SoloCatalogMCPAdapter/);
-  assert.match(backend, /NHTSAVPICAdapter/);
+  assert.match(backend, /TradesoftPartsCatalogsAdapter/);
   assert.match(backend, /catalog_results/);
+  assert.doesNotMatch(backend, /SoloCatalog|NHTSA|solocatalog|nhtsa/i);
 });
 
 test('unavailable sales and AI metrics are explicitly marked rather than fabricated', () => {
