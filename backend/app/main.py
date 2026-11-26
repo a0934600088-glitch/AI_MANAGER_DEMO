@@ -14,8 +14,6 @@ from pydantic import BaseModel, Field
 
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
-from app.providers.solocatalog_mcp import SoloCatalogMCPAdapter, SoloCatalogError
-from app.providers.nhtsa_vpic import NHTSAVPICAdapter
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as version_file:
@@ -30,18 +28,10 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 admin_auth = HTTPBasic(auto_error=False)
 TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
-SOLOCATALOG_ENABLED = os.getenv("SOLOCATALOG_ENABLED", "true").strip().lower() == "true"
-SOLOCATALOG_ADAPTER = SoloCatalogMCPAdapter(
-    os.getenv("SOLOCATALOG_MCP_URL", "https://solocatalog.com/mcp").strip(),
-    api_key=os.getenv("SOLOCATALOG_API_KEY", ""),
-    timeout_seconds=TIMEOUT_SECONDS,
-) if SOLOCATALOG_ENABLED else None
-NHTSA_ENABLED = os.getenv("NHTSA_ENABLED", "true").strip().lower() == "true"
-NHTSA_ADAPTER = NHTSAVPICAdapter(timeout_seconds=TIMEOUT_SECONDS) if NHTSA_ENABLED else None
 app = FastAPI(
     title="AI Manager Catalog API",
     version=APP_VERSION,
-    description="Parallel OEM catalogue search through TradeSoft and SoloCatalog, with NHTSA VIN cross-checking.",
+    description="OEM catalogue search through TradeSoft Parts.Catalogs.",
 )
 
 _configured_origins = os.getenv("CORS_ORIGINS", "")
@@ -195,11 +185,7 @@ async def health():
         "analytics_database": database,
         "providers": [
             {"id": "tradesoft_parts_catalogs", "type": "oem_parts_catalog", "enabled": TRADESOFT_ENABLED},
-            {"id": "solocatalog_mcp", "type": "oem_parts_catalog", "enabled": bool(SOLOCATALOG_ADAPTER)},
-            {"id": "nhtsa_vpic", "type": "vin_decoder_only", "enabled": bool(NHTSA_ADAPTER)},
         ],
-        "provider_limit_per_tenant": 10,
-        "note": "NHTSA is a VIN decoder, not an OEM parts catalogue. Live provider reachability is measured on lookup requests.",
     }
 
 @app.get("/api/language/v1/languages")
@@ -316,30 +302,18 @@ async def admin_conversations(
 
 @app.get("/api/catalog/v1/providers")
 async def providers():
-    configured = sum((TRADESOFT_ENABLED, bool(SOLOCATALOG_ADAPTER), bool(NHTSA_ADAPTER)))
     return {
-        "limit": 10,
-        "configured": configured,
-        "primary_provider": "tradesoft_parts_catalogs" if TRADESOFT_ENABLED else ("solocatalog_mcp" if SOLOCATALOG_ADAPTER else None),
+        "limit": 1,
+        "configured": int(TRADESOFT_ENABLED),
+        "primary_provider": "tradesoft_parts_catalogs" if TRADESOFT_ENABLED else None,
         "providers": [
             {"id": "tradesoft_parts_catalogs", "name": "TradeSoft OEM Parts.Catalogs",
-             "kind": "primary_oem_catalog", "enabled": TRADESOFT_ENABLED,
+             "kind": "oem_parts_catalog", "enabled": TRADESOFT_ENABLED,
              "capabilities": ["vin_decode", "frame_decode", "vehicle_catalogue", "group_navigation", "schemas", "oem_parts", "diagram_callouts"],
              "authentication": "Server-side API key"},
-            {"id": "solocatalog_mcp", "name": "SoloCatalog", "kind": "secondary_oem_catalog",
-             "enabled": bool(SOLOCATALOG_ADAPTER),
-             "capabilities": ["vin_decode", "parts_search", "diagrams", "diagram_parts", "oem_lookup"],
-             "authentication": "MCP light-use allowance; optional server-side API key"},
-            {"id": "nhtsa_vpic", "name": "NHTSA vPIC", "kind": "vin_decoder_only",
-             "enabled": bool(NHTSA_ADAPTER), "capabilities": ["vin_decode"],
-             "catalog": False, "authentication": "Public, no key"},
-        ],
-        "reserved_slots": [
-            {"id": f"catalog_slot_{i:02d}", "name": f"Reserved catalogue slot {i}",
-             "configured": False, "enabled": False}
-            for i in range(4, 11)
         ],
     }
+
 
 def _first_vehicle_text(record: dict[str, Any], *keys: str) -> str | None:
     for key in keys:
@@ -423,149 +397,56 @@ async def _catalog_event(provider: str, route: str, mode: str, status_code: int,
         pass
 
 
-def _find_solo_vehicle(value: Any) -> dict[str, Any] | None:
-    pending = [value]
-    while pending:
-        item = pending.pop(0)
-        if isinstance(item, dict):
-            keys = {str(key).replace("_", "").lower() for key in item}
-            if keys & {"brand", "make", "manufacturer"} and keys & {"model", "modelname", "title"}:
-                return item
-            pending.extend(v for v in item.values() if isinstance(v, (dict, list)))
-        elif isinstance(item, list):
-            pending.extend(item)
-    return value if isinstance(value, dict) else None
-
-
-def _normalize_solo_vehicle(value: Any) -> dict[str, Any]:
-    record = _find_solo_vehicle(value)
-    if not record:
-        return {"catalogue_result": value}
-    normalized = dict(record)
-    brand = _first_vehicle_text(record, "brand", "make", "manufacturer", "manufacturerName")
-    model = _first_vehicle_text(record, "model", "modelName", "title", "vehicleName")
-    if brand:
-        normalized["brand"] = brand
-        normalized["make"] = brand
-    if model:
-        normalized["model"] = model
-    return normalized
-
-
-def _nhtsa_vehicle_record(data: dict[str, Any]) -> dict[str, Any]:
-    fields = {
-        "brand": data.get("Make"), "make": data.get("Make"),
-        "model": data.get("Model"), "model_description": data.get("Model"),
-        "year": data.get("ModelYear"), "model_year": data.get("ModelYear"),
-        "engine": data.get("EngineModel") or data.get("EngineConfiguration"),
-        "engine_info": data.get("DisplacementL"), "fuel_type": data.get("FuelTypePrimary"),
-        "transmission": data.get("TransmissionStyle"), "source": "nhtsa_vpic",
-    }
-    return {k: v for k, v in fields.items() if v not in (None, "", "0", "Not Applicable")}
-
-
 @app.post("/api/catalog/v1/vehicles/decode")
 async def decode_vehicle(payload: DecodeRequest, request: Request):
     vin = payload.vin.strip().upper()
     if not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
         raise HTTPException(status_code=422, detail="VIN must contain 17 valid characters.")
 
-    async def call_trade():
-        started = asyncio.get_running_loop().time()
-        try:
-            if not TRADESOFT_ADAPTER:
-                raise TradesoftError("not_configured", "TradeSoft is not configured.")
-            rows = await TRADESOFT_ADAPTER.decode(vin, "vin", payload.lang)
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            if len(rows) != 1:
-                await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
-                return {"provider": "tradesoft_parts_catalogs", "status": "ambiguous", "data": rows, "elapsed_ms": elapsed}
-            vehicle = _normalize_tradesoft_vehicle(rows[0])
-            if vehicle.get("catalogId") is None or vehicle.get("carId") is None:
-                await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"))
-                return {"provider": "tradesoft_parts_catalogs", "status": "invalid_vehicle_record", "error": "TradeSoft VIN record has no catalogue identity.", "elapsed_ms": elapsed}
+    started = asyncio.get_running_loop().time()
+    try:
+        adapter = _require_tradesoft()
+        rows = await adapter.decode(vin, "vin", payload.lang)
+        elapsed = (asyncio.get_running_loop().time() - started) * 1000
+        if len(rows) != 1:
             await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "tradesoft_parts_catalogs", "status": "success", "data": vehicle, "elapsed_ms": elapsed}
-        except Exception as exc:
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            code = getattr(exc, "code", "unavailable")
-            status = getattr(exc, "status_code", None) or (503 if code == "not_configured" else 502)
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "tradesoft_parts_catalogs", "status": code, "error": str(exc)[:240], "elapsed_ms": elapsed}
-
-    async def call_solo():
-        started = asyncio.get_running_loop().time()
-        try:
-            if not SOLOCATALOG_ADAPTER:
-                raise SoloCatalogError("not_configured", "SoloCatalog is disabled.")
-            wrapped = await SOLOCATALOG_ADAPTER.decode(vin, payload.lang)
-            data = wrapped.get("data") if isinstance(wrapped, dict) else wrapped
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            await _catalog_event("solocatalog_mcp", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "solocatalog_mcp", "status": "success" if data else "no_data", "data": data, "elapsed_ms": elapsed}
-        except Exception as exc:
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            status = getattr(exc, "status_code", None) or 502
-            await _catalog_event("solocatalog_mcp", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "solocatalog_mcp", "status": getattr(exc, "code", "unavailable"), "error": str(exc)[:240], "elapsed_ms": elapsed}
-
-    async def call_nhtsa():
-        started = asyncio.get_running_loop().time()
-        try:
-            if not NHTSA_ADAPTER:
-                raise RuntimeError("NHTSA vPIC is disabled.")
-            data = await NHTSA_ADAPTER.decode(vin)
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            await _catalog_event("nhtsa_vpic", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "nhtsa_vpic", "status": "success" if data else "no_data", "data": data, "elapsed_ms": elapsed}
-        except Exception as exc:
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            await _catalog_event("nhtsa_vpic", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "nhtsa_vpic", "status": "unavailable", "error": str(exc)[:240], "elapsed_ms": elapsed}
-
-    results = await asyncio.gather(call_trade(), call_solo(), call_nhtsa())
-    trade = next(x for x in results if x["provider"] == "tradesoft_parts_catalogs")
-    solo = next(x for x in results if x["provider"] == "solocatalog_mcp")
-    nhtsa = next(x for x in results if x["provider"] == "nhtsa_vpic")
-    if trade["status"] == "ambiguous":
-        return {"vin": vin, "status": "ambiguous", "vehicle": None,
+            return {
+                "vin": vin, "status": "ambiguous", "vehicle": None,
                 "vehicle_data_complete": False, "vehicle_missing_fields": ["vehicle_variant"],
-                "providers": results, "is_oem_catalog_verified": False,
-                "source": "tradesoft_parts_catalogs"}
+                "providers": [{"provider": "tradesoft_parts_catalogs", "status": "ambiguous", "elapsed_ms": elapsed}],
+                "is_oem_catalog_verified": False, "source": "tradesoft_parts_catalogs",
+            }
+        vehicle = _normalize_tradesoft_vehicle(rows[0])
+        if vehicle.get("catalogId") is None or vehicle.get("carId") is None:
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"))
+            raise HTTPException(status_code=502, detail="TradeSoft VIN response has no OEM catalogue identity.")
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
+        completeness = _vehicle_completeness(vehicle)
+        trace("VIN decode", "tradesoft_parts_catalogs", "success", "TradeSoft OEM catalogue VIN lookup completed", {
+            "catalog_verified": True,
+            "vehicle_data_complete": completeness["details_complete"],
+        })
+        return {
+            "vin": vin, "status": "success", "vehicle": vehicle,
+            "vehicle_identity_complete": completeness["identity_complete"],
+            "vehicle_data_complete": completeness["details_complete"],
+            "vehicle_missing_fields": completeness["missing_fields"],
+            "providers": [{"provider": "tradesoft_parts_catalogs", "status": "success", "elapsed_ms": elapsed}],
+            "is_oem_catalog_verified": True, "source": "tradesoft_parts_catalogs",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        elapsed = (asyncio.get_running_loop().time() - started) * 1000
+        status = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"))
+        trace("VIN decode", "tradesoft_parts_catalogs", "error", str(exc)[:240])
+        raise HTTPException(status_code=status, detail={
+            "provider": "tradesoft_parts_catalogs",
+            "status": getattr(exc, "code", "unavailable"),
+            "message": str(exc)[:240],
+        }) from exc
 
-    selected = None
-    source = None
-    for item in (trade, solo):
-        if item["status"] == "success" and item.get("data"):
-            selected, source = item["data"], item["provider"]
-            break
-    if selected is None and nhtsa["status"] == "success" and nhtsa.get("data"):
-        selected, source = _nhtsa_vehicle_record(nhtsa["data"]), "nhtsa_vpic"
-    if selected is None:
-        raise HTTPException(status_code=502, detail={"message": "All vehicle providers failed or returned no match.", "providers": results})
-
-    if source == "tradesoft_parts_catalogs":
-        vehicle = selected
-        catalog_verified = bool(vehicle.get("catalogId") is not None and vehicle.get("carId") is not None)
-    elif source == "solocatalog_mcp":
-        vehicle = _normalize_solo_vehicle(selected)
-        catalog_verified = _has_nested_vehicle_field(selected, {"catalogid", "catalogueid", "catalog", "catalogue", "modelkey", "vehiclecatalog", "carid", "vehicleid", "epc"})
-    else:
-        vehicle, catalog_verified = selected, False
-
-    completeness = _vehicle_completeness(vehicle)
-    trace("VIN decode", source, "success" if catalog_verified else "vehicle_only", "Parallel VIN provider lookup completed", {
-        "provider_statuses": {x["provider"]: x["status"] for x in results},
-        "catalog_verified": catalog_verified,
-        "vehicle_data_complete": completeness["details_complete"],
-    })
-    return {
-        "vin": vin, "status": "success" if catalog_verified else "vehicle_only",
-        "vehicle": vehicle, "vehicle_identity_complete": completeness["identity_complete"],
-        "vehicle_data_complete": completeness["details_complete"],
-        "vehicle_missing_fields": completeness["missing_fields"],
-        "providers": results, "is_oem_catalog_verified": catalog_verified, "source": source,
-    }
 
 @app.post("/api/catalog/v1/lookup")
 async def catalogue_lookup(payload: LookupRequest, request: Request):
@@ -577,65 +458,38 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
     if vin and not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
         raise HTTPException(status_code=422, detail="VIN must contain 17 valid characters.")
 
-    async def call_trade():
-        started = asyncio.get_running_loop().time()
-        try:
-            if not TRADESOFT_ADAPTER or not vin:
-                raise TradesoftError("not_configured", "TradeSoft is disabled or VIN is missing.")
-            result = await TRADESOFT_ADAPTER.lookup(vin, payload.mode, payload.q, payload.lang, payload.group_id)
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            status = "ambiguous" if result.get("status") == "ambiguous" else "success"
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "tradesoft_parts_catalogs", "status": status, "result": result, "elapsed_ms": elapsed}
-        except Exception as exc:
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            status = getattr(exc, "status_code", None) or 502
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "tradesoft_parts_catalogs", "status": getattr(exc, "code", "unavailable"), "error": str(exc)[:240], "elapsed_ms": elapsed}
-
-    async def call_solo():
-        started = asyncio.get_running_loop().time()
-        try:
-            if not SOLOCATALOG_ADAPTER:
-                raise SoloCatalogError("not_configured", "SoloCatalog is disabled.")
-            if payload.mode != "models" and not vin:
-                raise SoloCatalogError("missing_vin", "SoloCatalog vehicle lookup requires VIN.")
-            if payload.mode == "groups" or (payload.mode == "parts" and payload.group_id is not None):
-                raise SoloCatalogError("unsupported_operation", "SoloCatalog cannot consume TradeSoft group identifiers.")
-            wrapped = await SOLOCATALOG_ADAPTER.lookup(
-                vin=vin or "", mode=payload.mode, query=payload.q, lang=payload.lang,
-                brand=payload.brand, model=payload.model, diagram=payload.diagram,
-            )
-            result = wrapped.get("data") if isinstance(wrapped, dict) else wrapped
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            await _catalog_event("solocatalog_mcp", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "solocatalog_mcp", "status": "success" if result is not None else "no_data", "result": result, "elapsed_ms": elapsed}
-        except Exception as exc:
-            elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            status = getattr(exc, "status_code", None) or 502
-            await _catalog_event("solocatalog_mcp", "/api/catalog/v1/lookup", payload.mode, status, elapsed, request.headers.get("X-Conversation-ID"))
-            return {"provider": "solocatalog_mcp", "status": getattr(exc, "code", "unavailable"), "error": str(exc)[:240], "elapsed_ms": elapsed}
-
-    results = await asyncio.gather(call_trade(), call_solo())
-    trade = next(x for x in results if x["provider"] == "tradesoft_parts_catalogs")
-    usable = [x for x in results if x.get("status") == "success" and x.get("result") is not None]
-    if trade["status"] == "ambiguous":
-        return {"status": "ambiguous", "mode": payload.mode, "vin": vin,
-                "result": trade.get("result"), "providers": results, "catalog_results": results,
-                "source": "tradesoft_parts_catalogs", "is_demo_data": False}
-    if not usable:
-        raise HTTPException(status_code=502, detail={
-            "message": "All compatible parts catalogues failed or returned no result.",
-            "providers": results,
+    started = asyncio.get_running_loop().time()
+    try:
+        adapter = _require_tradesoft()
+        result = await adapter.lookup(vin or "", payload.mode, payload.q, payload.lang, payload.group_id)
+        elapsed = (asyncio.get_running_loop().time() - started) * 1000
+        status = "ambiguous" if isinstance(result, dict) and result.get("status") == "ambiguous" else "success"
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"))
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", status, "TradeSoft OEM catalogue lookup completed", {
+            "mode": payload.mode, "catalog_verified": True,
         })
-    primary = next((x for x in usable if x["provider"] == "tradesoft_parts_catalogs"), usable[0])
-    trace("OEM catalogue lookup", primary["provider"], "success", "Parallel catalogue lookup completed", {
-        "mode": payload.mode, "provider_statuses": {x["provider"]: x["status"] for x in results},
-    })
-    return {
-        "status": "success", "mode": payload.mode, "vin": vin,
-        "source": primary["provider"], "result": primary["result"],
-        "catalog_results": results,
-        "providers": [{"provider": x["provider"], "status": x["status"], "elapsed_ms": x["elapsed_ms"]} for x in results],
-        "is_demo_data": False,
-    }
+        catalog_result = {
+            "provider": "tradesoft_parts_catalogs",
+            "status": status,
+            "result": result,
+            "elapsed_ms": elapsed,
+        }
+        return {
+            "status": status, "mode": payload.mode, "vin": vin,
+            "source": "tradesoft_parts_catalogs", "result": result,
+            "catalog_results": [catalog_result],
+            "providers": [{"provider": "tradesoft_parts_catalogs", "status": status, "elapsed_ms": elapsed}],
+            "is_demo_data": False,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        elapsed = (asyncio.get_running_loop().time() - started) * 1000
+        status_code = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"))
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "error", str(exc)[:240], {"mode": payload.mode})
+        raise HTTPException(status_code=status_code, detail={
+            "provider": "tradesoft_parts_catalogs",
+            "status": getattr(exc, "code", "unavailable"),
+            "message": str(exc)[:240],
+        }) from exc
