@@ -67,7 +67,19 @@ class TradesoftPartsCatalogsAdapter:
         if response.status_code >= 500:
             raise TradesoftError("unavailable", f"TradeSoft API server error (HTTP {response.status_code}).", response.status_code)
         if response.status_code >= 400:
-            raise TradesoftError("upstream_error", f"TradeSoft API rejected the request (HTTP {response.status_code}).", response.status_code)
+            try:
+                detail = response.json()
+            except ValueError:
+                detail = response.text
+            detail_text = str(detail)[:350]
+            detail_text = re.sub(r"[A-HJ-NPR-Z0-9]{17}", lambda match: "*" * 13 + match.group(0)[-4:], detail_text, flags=re.IGNORECASE)
+            request_id = response.headers.get("x-request-id") or response.headers.get("X-Request-ID")
+            suffix = f" Request ID: {request_id}." if request_id else ""
+            raise TradesoftError(
+                "upstream_error",
+                f"TradeSoft API rejected the request (HTTP {response.status_code}): {detail_text}.{suffix}",
+                response.status_code,
+            )
         try:
             return response.json()
         except ValueError:
