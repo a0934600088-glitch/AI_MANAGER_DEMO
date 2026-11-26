@@ -142,6 +142,20 @@ class MultiCatalogRouteTests(unittest.TestCase):
         self.assertEqual(result["source"], "solocatalog_mcp")
         self.assertTrue(result["is_oem_catalog_verified"])
 
+    def test_incomplete_tradesoft_vehicle_falls_back_to_solo_catalog(self):
+        trade = type("Trade", (), {"decode": AsyncMock(return_value=[{
+            "brand": "VOLKSWAGEN", "title": "Golf",
+        }])})()
+        solo = type("Solo", (), {"decode": AsyncMock(return_value={
+            "data": {"brand": "VOLKSWAGEN", "model": "Golf", "catalogue": "VW"}
+        })})()
+        nhtsa = type("NHTSA", (), {"decode": AsyncMock(return_value={})})()
+        main.TRADESOFT_ADAPTER, main.SOLOCATALOG_ADAPTER, main.NHTSA_ADAPTER = trade, solo, nhtsa
+        with patch("app.main.analytics.record_event"):
+            result = asyncio.run(main.decode_vehicle(main.DecodeRequest(vin="WVWZZZAUZJP594600"), _request()))
+        self.assertEqual(result["source"], "solocatalog_mcp")
+        self.assertTrue(result["is_oem_catalog_verified"])
+
     def test_nhtsa_only_never_authorizes_oem_parts_search(self):
         trade = type("Trade", (), {"decode": AsyncMock(side_effect=RuntimeError("offline"))})()
         solo = type("Solo", (), {"decode": AsyncMock(side_effect=RuntimeError("offline"))})()
