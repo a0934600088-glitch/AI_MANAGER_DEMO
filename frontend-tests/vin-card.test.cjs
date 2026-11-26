@@ -88,5 +88,5 @@ test('TradeSoft parts2 response renders original diagram, partGroups and callout
   assert.match(html, /const positions=catalogRows\(payload,\['positions'\]\)/);
   assert.match(html, /positionNumber/);
   assert.match(html, /payload\?\.img/);
-  assert.match(html, /v\.startsWith\('\/'\)/);
+  assert.ok(html.includes("v.startsWith('//')"));
 });
