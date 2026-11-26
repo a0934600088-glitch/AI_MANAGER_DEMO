@@ -106,7 +106,7 @@ test('confirmed customer part request opens groups and carries query to the sele
 test('full TradeSoft vehicle response fields are preserved for the expanded VIN card', () => {
   assert.match(html, /function collectFields\(obj,out=\{\},seen=new Set\(\),parent=''/);
   assert.match(html, /hidden\.has\(normalized\)/);
-  assert.match(html, /Характеристики двигателя/);
+  assert.match(html, /Тип двигателя/);
   assert.match(html, /productionYear/);
 });
 test('vehicle confirmation waits for the customer part request instead of opening the catalogue tree', () => {
