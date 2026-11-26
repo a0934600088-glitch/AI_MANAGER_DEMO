@@ -198,41 +198,69 @@ function groupMatchTerms(query){
 function scoreCatalogGroup(item,terms){const name=groupLabel(item).toLowerCase();let score=0;for(const term of terms)if(name.includes(term.toLowerCase()))score+=term.length>5?2:1;return score}
 function renderCatalogGroupSuggestions(rows,title){const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent=title;el.append(heading);rows.forEach((item,index)=>{const id=groupIdOf(item),label=groupLabel(item),hasParts=catalogFlag(item.hasParts??item.has_parts),hasSubgroups=catalogFlag(item.hasSubgroups??item.has_subgroups);const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='display:block;width:100%;text-align:left;margin-top:7px;white-space:normal';button.textContent=label+(hasParts?' · детали':hasSubgroups?' · подгруппы':'');button.disabled=!id||(!hasParts&&!hasSubgroups);if(!button.disabled)button.onclick=()=>lookup(hasParts?'parts':'groups',pendingPartQuery,id);el.append(button)});$('messages').append(el);scrollEnd()}
 async function searchCatalogForRequest(query){
- const started=Date.now(),terms=groupMatchTerms(query),budget={calls:0,max:36},candidates=[];
- async function walk(rows,path=[],depth=0){
-  if(depth>7||budget.calls>=budget.max)return;
-  const ranked=rows.map(item=>({item,score:scoreCatalogGroup(item,terms),label:groupLabel(item)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
-  for(const entry of ranked){
-   if(budget.calls>=budget.max)break;
-   const item=entry.item,id=groupIdOf(item),nextPath=[...path,entry.label];
-   if(!id)continue;
-   const hasParts=catalogFlag(item.hasParts??item.has_parts),hasSubgroups=catalogFlag(item.hasSubgroups??item.has_subgroups);
-   if(hasParts)candidates.push({id,label:entry.label,path:nextPath,score:entry.score+path.reduce((n,p)=>n+scoreCatalogGroup({name:p},terms),0)});
-   if(hasSubgroups&&depth<7){
-    budget.calls++;
-    try{const response=await api('/api/catalog/v1/lookup',{mode:'groups',vin,q:query,group_id:id,lang:currentRequestLang});const children=catalogRows(response?.result?.groups);if(children.length)await walk(children,nextPath,depth+1)}catch(e){trackEvent('parts_lookup_failed',{mode:'groups',status:e.status||0})}
-   }
-  }
- }
- let root;try{const response=await api('/api/catalog/v1/lookup',{mode:'groups',vin,q:query,lang:currentRequestLang});root=catalogRows(response?.result?.groups)}catch(e){throw e}
- if(!root.length){add('TradeSoft не вернул группы каталога для этого автомобиля.','bot','system');return}
- await walk(root);
- candidates.sort((a,b)=>b.score-a.score);
- const best=candidates[0];
- if(best&&best.score>=2&&(!candidates[1]||best.score>candidates[1].score)){
-  add('Найден узел каталога: '+best.path.join(' → ')+'. Загружаю оригинальную схему и позиции TradeSoft…','bot','good');
-  await lookup('parts',query,best.id);return
- }
- const suggestions=(candidates.length?candidates.slice(0,6).map(x=>({id:x.id,name:x.path.join(' → '),hasParts:true})):root);
- trackEvent('parts_selection_incomplete',{mode:'auto_group_search',reason:'ambiguous_group',calls:budget.calls,elapsed_ms:Date.now()-started});
- renderCatalogGroupSuggestions(suggestions,'Не удалось надёжно определить точный узел по запросу «'+query+'». Выберите подходящий вариант:');
+ // TradeSoft supports direct OEM schema search by partName. Do not expose its group tree to customers.
+ await lookup('parts',query);
 }
 
-function renderCatalogParts(result){const payload=result?.parts??result;const groupRows=catalogRows(payload,['partGroups','part_groups']);const parts=groupRows.flatMap(group=>catalogRows(group?.parts,['parts','items','data','results']));const flatParts=parts.length?parts:catalogRows(payload,['parts','items','data','results','list']);const imageUrl=typeof payload?.img==='string'?(payload.img.startsWith('//')?'https:'+payload.img:payload.img):null;const positions=catalogRows(payload,['positions']);if(imageUrl){const shell=document.createElement('div');shell.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Оригинальная схема TradeSoft';shell.append(heading);const stage=document.createElement('div');stage.style.cssText='position:relative;width:100%;margin-top:8px;background:#fff;border-radius:8px;overflow:hidden';const img=document.createElement('img');img.src=imageUrl;img.alt='Оригинальная схема узла из TradeSoft';img.style.cssText='display:block;width:100%;height:auto';stage.append(img);const overlay=document.createElement('div');overlay.style.cssText='position:absolute;inset:0;pointer-events:none';stage.append(overlay);img.onload=()=>{overlay.innerHTML='';const w=img.naturalWidth||1,h=img.naturalHeight||1;positions.forEach(position=>{const coords=position.coordinates||position.coords;if(!Array.isArray(coords)||coords.length<2)return;const marker=document.createElement('button');marker.type='button';marker.textContent=String(position.number??position.positionNumber??'');marker.style.cssText='position:absolute;pointer-events:auto;transform:translate(-50%,-50%);padding:2px 5px;min-width:23px;border-radius:50%;font-size:10px;border:1px solid #111;background:#f6d365;color:#111;box-shadow:0 1px 4px #0009';marker.style.left=((Number(coords[0])+Number(coords[2]||0)/2)/w*100)+'%';marker.style.top=((Number(coords[1])+Number(coords[3]||0)/2)/h*100)+'%';marker.onclick=()=>{const part=flatParts.find(x=>String(x.positionNumber??x.position_number??x.callout??'')===String(position.number??position.positionNumber??''));if(part){const number=catalogValue(part,['number','oeNumber','oe_number','partNumber','part_number']);add('Выбрана позиция '+position.number+(number?' · OE '+number:''),'bot','good')}};overlay.append(marker)})};elAppendImage(shell,stage);$('messages').append(shell)}else showImages(payload);if(!flatParts.length){trackEvent('parts_selection_incomplete',{mode:'parts',reason:'empty_parts'});add('TradeSoft не вернул позиции деталей для выбранной группы. Номер OE не придумывается. Проверьте другую группу или передайте запрос менеджеру.','bot','system');return}const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Детали оригинального каталога TradeSoft';el.append(heading);flatParts.forEach((item,index)=>{const line=document.createElement('button');line.type='button';line.className='secondary';line.style.cssText='display:block;width:100%;text-align:left;margin-top:6px;white-space:normal';const name=catalogValue(item,['name','title','description','partName','part_name','text'])||('Позиция '+(index+1));const oe=catalogValue(item,['number','oeNumber','oe_number','oemNumber','oem_number','article','partNumber','part_number']);const callout=catalogValue(item,['positionNumber','position_number','callout','position']);line.textContent=name+(callout?' · позиция '+callout:'')+(oe?' · OE '+oe:'');line.onclick=()=>add('Выбрана деталь: '+name+(callout?' · позиция '+callout:'')+(oe?' · оригинальный номер '+oe:''),'bot','good');el.append(line)});$('messages').append(el);scrollEnd()}
+function renderCatalogParts(result){
+ const payload=result?.parts??result;
+ const groupRows=catalogRows(payload,['partGroups','part_groups']);
+ const parts=groupRows.flatMap(group=>catalogRows(group?.parts,['parts','items','data','results']));
+ const flatParts=parts.length?parts:catalogRows(payload,['parts','items','data','results','list']);
+ const imageUrl=typeof payload?.img==='string'?(payload.img.startsWith('//')?'https:'+payload.img:payload.img):null;
+ const positions=catalogRows(payload,['positions']);
+ if(imageUrl){
+  const shell=document.createElement('div');shell.className='msg';
+  const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Оригинальная схема TradeSoft';shell.append(heading);
+  const controls=document.createElement('div');controls.style.cssText='display:flex;gap:7px;align-items:center;margin-top:8px';
+  const stage=document.createElement('div');stage.style.cssText='position:relative;width:100%;margin-top:8px;background:#fff;border-radius:8px;overflow:auto;max-height:70vh;touch-action:pan-x pan-y';
+  const canvas=document.createElement('div');canvas.style.cssText='position:relative;width:100%;transform-origin:top left;transition:transform .12s ease';
+  const img=document.createElement('img');img.src=imageUrl;img.alt='Оригинальная схема узла из TradeSoft';img.style.cssText='display:block;width:100%;height:auto';
+  const overlay=document.createElement('div');overlay.style.cssText='position:absolute;inset:0;pointer-events:none';
+  canvas.append(img,overlay);stage.append(canvas);
+  let zoom=1;const zoomLabel=document.createElement('span');zoomLabel.className='muted';zoomLabel.textContent='100%';
+  const applyZoom=()=>{canvas.style.width=(100*zoom)+'%';canvas.style.transform='scale(1)';img.style.width='100%';zoomLabel.textContent=Math.round(zoom*100)+'%';stage.style.maxHeight=zoom>1?'70vh':'none'};
+  const zoomIn=document.createElement('button');zoomIn.type='button';zoomIn.className='secondary';zoomIn.textContent='+';zoomIn.setAttribute('aria-label','Увеличить схему');
+  const zoomOut=document.createElement('button');zoomOut.type='button';zoomOut.className='secondary';zoomOut.textContent='−';zoomOut.setAttribute('aria-label','Уменьшить схему');
+  const zoomReset=document.createElement('button');zoomReset.type='button';zoomReset.className='secondary';zoomReset.textContent='Сбросить';zoomReset.onclick=()=>{zoom=1;applyZoom()};
+  zoomIn.onclick=()=>{zoom=Math.min(3,zoom+.25);applyZoom()};zoomOut.onclick=()=>{zoom=Math.max(1,zoom-.25);applyZoom()};
+  controls.append(zoomOut,zoomLabel,zoomIn,zoomReset);shell.append(controls,stage);
+  img.onload=()=>{overlay.innerHTML='';const w=img.naturalWidth||1,h=img.naturalHeight||1;positions.forEach(position=>{
+   const coords=position.coordinates||position.coords;if(!Array.isArray(coords)||coords.length<2)return;
+   const marker=document.createElement('button');marker.type='button';marker.textContent=String(position.number??position.positionNumber??'');
+   marker.style.cssText='position:absolute;pointer-events:auto;transform:translate(-50%,-50%);padding:2px 5px;min-width:23px;border-radius:50%;font-size:10px;border:1px solid #111;background:#f6d365;color:#111;box-shadow:0 1px 4px #0009';
+   marker.style.left=((Number(coords[0])+Number(coords[2]||0)/2)/w*100)+'%';marker.style.top=((Number(coords[1])+Number(coords[3]||0)/2)/h*100)+'%';
+   marker.onclick=()=>{const part=flatParts.find(x=>String(x.positionNumber??x.position_number??x.callout??x.position??'')===String(position.number??position.positionNumber??''));if(part){const number=catalogValue(part,['number','oeNumber','oe_number','partNumber','part_number','oemNumber','oem_number']);const name=catalogValue(part,['name','title','description','partName','part_name','text'])||'Деталь';add('Выбрана деталь: '+name+' · позиция '+(position.number??position.positionNumber)+(number?' · оригинальный номер '+number:''),'bot','good')}else add('Выбрана позиция '+(position.number??position.positionNumber)+'. TradeSoft не вернул для неё OE-номер в этом ответе.','bot','system')};
+   overlay.append(marker)
+  })};
+  elAppendImage(shell,stage);$('messages').append(shell)
+ }else showImages(payload);
+ if(!flatParts.length){trackEvent('parts_selection_incomplete',{mode:'parts',reason:'empty_parts'});add('TradeSoft не вернул позиции деталей для выбранной схемы. OE-номер не придумывается. Передайте запрос менеджеру.','bot','system');return}
+ const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Позиции оригинального каталога TradeSoft';el.append(heading);
+ flatParts.forEach((item,index)=>{const line=document.createElement('button');line.type='button';line.className='secondary';line.style.cssText='display:block;width:100%;text-align:left;margin-top:6px;white-space:normal';const name=catalogValue(item,['name','title','description','partName','part_name','text'])||('Позиция '+(index+1));const oe=catalogValue(item,['number','oeNumber','oe_number','oemNumber','oem_number','article','partNumber','part_number']);const callout=catalogValue(item,['positionNumber','position_number','callout','position']);line.textContent=name+(callout?' · позиция '+callout:'')+(oe?' · OE '+oe:'');line.onclick=()=>add('Выбрана деталь: '+name+(callout?' · позиция '+callout:'')+(oe?' · оригинальный номер '+oe:''),'bot','good');el.append(line)});
+ $('messages').append(el);scrollEnd()
+}
 function elAppendImage(parent,child){parent.append(child)}
-function renderCatalogSchemas(result){const schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);if(!schemas.length){add('TradeSoft не вернул схемы по этому запросу. Выберите узел в дереве каталога.','bot','system');return}const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Найденные схемы TradeSoft — уточните узел в дереве каталога';el.append(heading);schemas.forEach((schema,index)=>{const name=catalogValue(schema,['name','title','description','partName','part_name'])||('Схема '+(index+1));const item=document.createElement('div');item.className='vehicle-row';item.textContent=name;el.append(item)});$('messages').append(el);scrollEnd()}
+function renderCatalogSchemas(result,query=pendingPartQuery){
+ const schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);
+ if(!schemas.length){add('TradeSoft не нашёл оригинальную схему по этому названию детали. Выдуманный узел не подставляется. Уточните название детали или передайте запрос менеджеру.','bot','system');return}
+ const groupOf=s=>catalogValue(s,['groupId','group_id','groupID','id','Id']);
+ if(schemas.length===1&&groupOf(schemas[0])){lookup('parts',query,groupOf(schemas[0]));return}
+ const el=document.createElement('div');el.className='msg';
+ const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Схемы TradeSoft по вашему запросу';el.append(heading);
+ schemas.forEach((schema,index)=>{
+  const name=catalogValue(schema,['name','title','description','partName','part_name','text'])||('Схема '+(index+1));
+  const id=groupOf(schema);const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
+  const item=document.createElement('div');item.className='vehicle-row';
+  if(image){const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=name;img.style.cssText='display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:7px;margin:6px 0';item.append(img)}
+  const label=document.createElement('div');label.textContent=name;item.append(label);
+  if(id){const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='width:100%;text-align:left;margin-top:7px';button.textContent='Открыть схему и выбрать позицию';button.onclick=()=>lookup('parts',query,id);item.append(button)}
+  el.append(item)
+ });
+ $('messages').append(el);scrollEnd()
+}
 
-async function lookup(mode,q,groupId){if(!vin||!vehicleConfirmed){add('Сначала подтвердите VIN и данные автомобиля. До подтверждения поиск запчастей не запускается.');return}if(!catalogVerified){add('Для этого VIN не подтверждён OEM-каталог. Поиск деталей остановлен, чтобы не выдать несовместимую запчасть.');return}setBusy(true);try{const catalogQuery=window.AIManagerLanguage?window.AIManagerLanguage.expandQuery(q):q;const request={mode,vin,q:catalogQuery,lang:currentRequestLang};if(groupId!==undefined&&groupId!==null)request.group_id=groupId;const d=await api('/api/catalog/v1/lookup',request);if(d?.status==='ambiguous'){trackEvent('parts_selection_incomplete',{mode,reason:'ambiguous_vehicle'});add('Каталог вернул несколько вариантов. Выбор запчастей остановлен до уточнения автомобиля.','bot','system')}else if(mode==='groups'){const result=d.result||{};renderCatalogGroups(result)}else if(mode==='diagrams'||mode==='diagram'){renderCatalogSchemas(d.result||d)}else if(mode==='parts'){if(d.result?.schemas)renderCatalogSchemas(d.result);else renderCatalogParts(d.result||d);pendingPartQuery=''}else{const fields=collectFields(d.result||d);const el=document.createElement('div');el.className='msg';el.textContent=Object.entries(fields).map(([k,v])=>fieldLabel(k)+': '+v).join('\\n');$('messages').append(el);scrollEnd()}}catch(e){trackEvent('parts_lookup_failed',{mode,status:e.status||0});const detail=e.payload?.detail;const providerStatus=detail&&typeof detail==='object'?detail.status:null;add(providerStatus==='not_configured'?'TradeSoft не включён на сервере. Запрос не был отправлен в OEM-каталог.':providerStatus==='authorization_error'?'TradeSoft отклонил API-ключ. Проверьте доступ к Parts.Catalogs.':providerStatus==='access_denied'?'TradeSoft запретил доступ к каталогу или выбранному ресурсу.':providerStatus==='not_found'?'TradeSoft не нашёл данные для этого запроса.':providerStatus==='rate_limited'?'TradeSoft ограничил частоту запросов. Повторите позже.':'Не удалось выполнить запрос к TradeSoft. Проверьте журнал backend; результат не подменялся демонстрационными данными.','bot','system')}finally{setBusy(false);refreshOps()}}
+async function lookup(mode,q,groupId){if(!vin||!vehicleConfirmed){add('Сначала подтвердите VIN и данные автомобиля. До подтверждения поиск запчастей не запускается.');return}if(!catalogVerified){add('Для этого VIN не подтверждён OEM-каталог. Поиск деталей остановлен, чтобы не выдать несовместимую запчасть.');return}setBusy(true);try{const catalogQuery=window.AIManagerLanguage?window.AIManagerLanguage.expandQuery(q):q;const request={mode,vin,q:catalogQuery,lang:currentRequestLang};if(groupId!==undefined&&groupId!==null)request.group_id=groupId;const d=await api('/api/catalog/v1/lookup',request);if(d?.status==='ambiguous'){trackEvent('parts_selection_incomplete',{mode,reason:'ambiguous_vehicle'});add('Каталог вернул несколько вариантов. Выбор запчастей остановлен до уточнения автомобиля.','bot','system')}else if(mode==='groups'){const result=d.result||{};renderCatalogGroups(result)}else if(mode==='diagrams'||mode==='diagram'){renderCatalogSchemas(d.result||d)}else if(mode==='parts'){if(d.result?.schemas)renderCatalogSchemas(d.result,pendingPartQuery||q);else renderCatalogParts(d.result||d);pendingPartQuery=''}else{const fields=collectFields(d.result||d);const el=document.createElement('div');el.className='msg';el.textContent=Object.entries(fields).map(([k,v])=>fieldLabel(k)+': '+v).join('\\n');$('messages').append(el);scrollEnd()}}catch(e){trackEvent('parts_lookup_failed',{mode,status:e.status||0});const detail=e.payload?.detail;const providerStatus=detail&&typeof detail==='object'?detail.status:null;add(providerStatus==='not_configured'?'TradeSoft не включён на сервере. Запрос не был отправлен в OEM-каталог.':providerStatus==='authorization_error'?'TradeSoft отклонил API-ключ. Проверьте доступ к Parts.Catalogs.':providerStatus==='access_denied'?'TradeSoft запретил доступ к каталогу или выбранному ресурсу.':providerStatus==='not_found'?'TradeSoft не нашёл данные для этого запроса.':providerStatus==='rate_limited'?'TradeSoft ограничил частоту запросов. Повторите позже.':'Не удалось выполнить запрос к TradeSoft. Проверьте журнал backend; результат не подменялся демонстрационными данными.','bot','system')}finally{setBusy(false);refreshOps()}}
 async function send(){
  if(busy)return;
  const v=$('input').value.trim();if(!v&&!files.length)return;
