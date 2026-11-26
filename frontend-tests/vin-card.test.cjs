@@ -66,7 +66,7 @@ test('vehicle confirmation starts the real TradeSoft group navigation', () => {
 });
 test('catalog groups select a provider group ID and request its real parts', () => {
   assert.match(html, /function renderCatalogGroups\(result\)/);
-  assert.match(html, /button\.onclick=\(\)=>lookup\('parts','',id\)/);
+  assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups','',id\)/);
   assert.match(html, /request\.group_id=groupId/);
   assert.match(html, /function renderCatalogParts\(result\)/);
   assert.match(html, /oeNumber/);
