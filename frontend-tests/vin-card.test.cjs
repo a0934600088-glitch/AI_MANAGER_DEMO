@@ -125,3 +125,19 @@ test('catalog search stops for ambiguous group matches and asks customer to choo
   assert.match(html, /Не удалось надёжно определить точный узел/);
   assert.match(html, /candidates\.slice\(0,6\)/);
 });
+
+test('VIN card labels TradeSoft engine code and engine type separately', () => {
+  const start = html.indexOf('function collectFields(');
+  const end = html.indexOf('\\nfunction showVehicle(', start);
+  const source = html.slice(start, end);
+  assert.match(source, /engine:'Код двигателя'/);
+  assert.match(source, /engine_info:'Тип двигателя'/);
+  assert.match(source, /engine_type:'Тип двигателя'/);
+  assert.match(source, /engineInfo:'Тип двигателя'/);
+  assert.match(html, /'Код двигателя','Тип двигателя','Объём двигателя'/);
+});
+test('VIN card keeps the engine type value from the supplied TradeSoft template', () => {
+  const collect = html.slice(html.indexOf('function collectFields('), html.indexOf('\\nfunction showVehicle('));
+  assert.match(collect, /engine_info:'Тип двигателя'/);
+  assert.match(collect, /engine:'Код двигателя'/);
+});
