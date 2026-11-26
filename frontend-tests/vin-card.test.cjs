@@ -30,7 +30,7 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
   assert.equal(fields['Марка'], 'VOLKSWAGEN');
   assert.equal(fields['Модель'], 'Golf/Variant/4Motion');
   assert.equal(fields['Год выпуска'], '2018');
-  assert.equal(fields['Двигатель'], '1600CC / 115hp / 85kW TDI CR');
+  assert.equal(fields['Характеристики двигателя'], '1600CC / 115hp / 85kW TDI CR');
   assert.equal(fields['Трансмиссия'], 'SSV(7A)');
 });
 
@@ -60,7 +60,7 @@ test('ambiguous VIN and catalogue results stop automatic selection', () => {
 });
 
 test('vehicle confirmation starts the real TradeSoft group navigation', () => {
-  assert.match(html, /yes\.onclick=async\(\)=>\{vehicleConfirmed=true/);
+  assert.match(html, /yes\.onclick=\(\)=>\{vehicleConfirmed=true/);
   assert.match(html, /Автомобиль подтверждён\. Теперь напишите нужную запчасть/);
   assert.match(html, /api\('\/api\/catalog\/v1\/lookup',request\)/);
 });
@@ -73,7 +73,7 @@ test('catalog groups select a provider group ID and request its real parts', () 
   assert.match(html, /callout/);
 });
 test('empty provider responses are reported without synthetic catalogue fixtures', () => {
-  assert.match(html, /TradeSoft подтвердил автомобиль, но не вернул список каталожных групп/);
+  assert.match(html, /TradeSoft не вернул группы оригинального каталога/);
   assert.match(html, /TradeSoft не вернул позиции деталей для выбранной группы/);
   assert.doesNotMatch(html, /synthetic|fixture|demoPart/i);
 });
@@ -97,7 +97,7 @@ test('part request is queued before vehicle confirmation instead of being discar
   assert.match(html, /Автомобиль подтверждён\. Теперь напишите нужную запчасть/);
 });
 test('confirmed customer part request opens groups and carries query to the selected leaf', () => {
-  assert.match(html, /pendingPartQuery=v;[\s\S]*?await lookup\('groups',''\)/);
+  assert.match(html, /pendingPartQuery=v;[\s\S]*?await searchCatalogForRequest\(v\)/);
   assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
   assert.match(html, /request\.group_id=groupId/);
   assert.match(html, /pendingPartQuery=''/);
