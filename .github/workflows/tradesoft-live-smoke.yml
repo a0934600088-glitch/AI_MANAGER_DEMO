@@ -1,0 +1,102 @@
+name: TradeSoft live catalogue smoke test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "backend/**"
+      - ".github/workflows/tradesoft-live-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  live-tradesoft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify live VIN → groups → OE parts against production TradeSoft
+        env:
+          API_BASE: https://ai-manager-api-production.up.railway.app
+        run: |
+          node <<'NODE'
+          const base = process.env.API_BASE;
+          const vehicles = [
+            { label: 'Subaru Legacy', vin: '4S4BSANC0H3224189' },
+            { label: 'Volkswagen Golf', vin: 'WVWZZZAUZJP594600' }
+          ];
+          function rows(value, seen = new Set()) {
+            if (!value || typeof value !== 'object' || seen.has(value)) return [];
+            seen.add(value);
+            if (Array.isArray(value)) return value.filter(x => x && typeof x === 'object');
+            for (const key of ['items', 'groups', 'data', 'results', 'parts', 'list']) {
+              if (Array.isArray(value[key])) return value[key].filter(x => x && typeof x === 'object');
+              if (value[key] && typeof value[key] === 'object') {
+                const found = rows(value[key], seen);
+                if (found.length) return found;
+              }
+            }
+            for (const child of Object.values(value)) {
+              if (child && typeof child === 'object') {
+                const found = rows(child, seen);
+                if (found.length) return found;
+              }
+            }
+            return [];
+          }
+          function groupId(item) {
+            for (const key of ['groupId', 'group_id', 'groupID', 'id', 'Id']) {
+              if (item?.[key] !== undefined && item[key] !== null && String(item[key]).trim()) return item[key];
+            }
+            return null;
+          }
+          async function post(path, body) {
+            const response = await fetch(base + path, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(45000)
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              const detail = payload.detail || payload;
+              throw new Error(path + ' HTTP ' + response.status + ': ' +
+                (typeof detail === 'string' ? detail : JSON.stringify(detail)).slice(0, 400));
+            }
+            return payload;
+          }
+          (async () => {
+            for (const vehicle of vehicles) {
+              const decoded = await post('/api/catalog/v1/vehicles/decode', { vin: vehicle.vin, lang: 'en' });
+              if (decoded.status !== 'success' || decoded.is_oem_catalog_verified !== true) {
+                throw new Error(vehicle.label + ': VIN was not uniquely verified by TradeSoft');
+              }
+              const car = decoded.vehicle || {};
+              if (car.catalogId == null || car.carId == null) {
+                throw new Error(vehicle.label + ': TradeSoft response has no catalogId/carId');
+              }
+              const grouped = await post('/api/catalog/v1/lookup', { vin: vehicle.vin, mode: 'groups', lang: 'en' });
+              const groups = rows(grouped.result?.groups);
+              if (grouped.status !== 'success' || !groups.length) {
+                throw new Error(vehicle.label + ': TradeSoft returned no catalogue groups');
+              }
+              const selected = groups.find(x => groupId(x) !== null);
+              if (!selected) throw new Error(vehicle.label + ': group response contains no selectable group ID');
+              const partsResponse = await post('/api/catalog/v1/lookup', {
+                vin: vehicle.vin, mode: 'parts', group_id: groupId(selected), lang: 'en'
+              });
+              const parts = rows(partsResponse.result?.parts);
+              if (partsResponse.status !== 'success' || !parts.length) {
+                throw new Error(vehicle.label + ': selected group returned no OEM part records');
+              }
+              const oeCount = parts.filter(x =>
+                ['oeNumber', 'oe_number', 'oemNumber', 'oem_number', 'partNumber', 'part_number']
+                  .some(k => x[k] !== undefined && x[k] !== null && String(x[k]).trim())
+              ).length;
+              console.log(vehicle.label + ': LIVE TradeSoft OK; groups=' + groups.length +
+                '; parts=' + parts.length + '; records_with_OE=' + oeCount);
+            }
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
