@@ -22,8 +22,10 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /trackEvent\('vehicle_confirmed'/);
   assert.match(chat, /catalogVerified=!!d\?\.is_oem_catalog_verified/);
   assert.match(chat, /if\(!catalogVerified\)/);
-  assert.match(chat, /d\.catalog_results/);
-  assert.match(chat, /TradeSoft OEM/);
+  assert.match(chat, /function renderCatalogGroups/);
+  assert.match(chat, /function renderCatalogParts/);
+  assert.match(chat, /request\.group_id=groupId/);
+  assert.match(chat, /Оригинальный каталог TradeSoft/);
   assert.doesNotMatch(chat, /SoloCatalog|NHTSA|solocatalog|nhtsa/i);
   assert.match(chat, /href="admin.html"/);
   assert.match(analytics, /_SAFE_METADATA/);

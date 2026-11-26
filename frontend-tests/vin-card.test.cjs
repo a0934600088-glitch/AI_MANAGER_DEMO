@@ -58,3 +58,35 @@ test('ambiguous VIN and catalogue results stop automatic selection', () => {
   assert.match(html, /status==='ambiguous'/);
   assert.match(html, /d\?\.status==='ambiguous'/);
 });
+
+test('vehicle confirmation starts the real TradeSoft group navigation', () => {
+  assert.match(html, /yes\.onclick=async\(\)=>\{vehicleConfirmed=true/);
+  assert.match(html, /if\(catalogVerified\)await lookup\('groups',''\)/);
+  assert.match(html, /api\('\/api\/catalog\/v1\/lookup',request\)/);
+});
+test('catalog groups select a provider group ID and request its real parts', () => {
+  assert.match(html, /function renderCatalogGroups\(result\)/);
+  assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups','',id\)/);
+  assert.match(html, /request\.group_id=groupId/);
+  assert.match(html, /function renderCatalogParts\(result\)/);
+  assert.match(html, /oeNumber/);
+  assert.match(html, /callout/);
+});
+test('empty provider responses are reported without synthetic catalogue fixtures', () => {
+  assert.match(html, /TradeSoft подтвердил автомобиль, но не вернул список каталожных групп/);
+  assert.match(html, /TradeSoft не вернул позиции деталей для выбранной группы/);
+  assert.doesNotMatch(html, /synthetic|fixture|demoPart/i);
+});
+
+test('group navigation descends until TradeSoft marks a node hasParts=true', () => {
+  assert.match(html, /function catalogFlag\(value\)/);
+  assert.match(html, /const hasParts=catalogFlag\(item\.hasParts\?\?item\.has_parts\)/);
+  assert.match(html, /lookup\(hasParts\?'parts':'groups','',id\)/);
+});
+test('TradeSoft parts2 response renders original diagram, partGroups and callout positions', () => {
+  assert.match(html, /catalogRows\(payload,\['partGroups','part_groups'\]\)/);
+  assert.match(html, /const positions=catalogRows\(payload,\['positions'\]\)/);
+  assert.match(html, /positionNumber/);
+  assert.match(html, /payload\?\.img/);
+  assert.ok(html.includes("v.startsWith('//')"));
+});
