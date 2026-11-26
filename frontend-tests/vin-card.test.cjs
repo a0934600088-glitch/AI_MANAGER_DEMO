@@ -77,3 +77,16 @@ test('empty provider responses are reported without synthetic catalogue fixtures
   assert.match(html, /TradeSoft не вернул позиции деталей для выбранной группы/);
   assert.doesNotMatch(html, /synthetic|fixture|demoPart/i);
 });
+
+test('group navigation descends until TradeSoft marks a node hasParts=true', () => {
+  assert.match(html, /function catalogFlag\(value\)/);
+  assert.match(html, /const hasParts=catalogFlag\(item\.hasParts\?\?item\.has_parts\)/);
+  assert.match(html, /lookup\(hasParts\?'parts':'groups','',id\)/);
+});
+test('TradeSoft parts2 response renders original diagram, partGroups and callout positions', () => {
+  assert.match(html, /catalogRows\(payload,\['partGroups','part_groups'\]\)/);
+  assert.match(html, /const positions=catalogRows\(payload,\['positions'\]\)/);
+  assert.match(html, /positionNumber/);
+  assert.match(html, /payload\?\.img/);
+  assert.match(html, /v\.startsWith\('\/'\)/);
+});
