@@ -29,6 +29,6 @@ test('shared translation layer preserves chat message content and supports both 
 });
 
 test('all surfaces use one bumped release version', () => {
-  assert.match(version, /^\\d+\\.\\d+\\.\\d+$/);
+  assert.ok(/^[0-9]+[.][0-9]+[.][0-9]+$/.test(version));
   assert.match(html, /id="appVersion"/);
 });
