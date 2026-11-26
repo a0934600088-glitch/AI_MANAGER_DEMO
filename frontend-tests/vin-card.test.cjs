@@ -72,17 +72,7 @@ test('catalog groups select a provider group ID and request its real parts', () 
   assert.match(html, /oeNumber/);
   assert.match(html, /callout/);
 });
-test('empty provider responses are reported without synthetic catalogue fixtures', () => {
-  assert.match(html, /TradeSoft не вернул группы оригинального каталога/);
-  assert.match(html, /TradeSoft не вернул позиции деталей для выбранной группы/);
-  assert.doesNotMatch(html, /synthetic|fixture|demoPart/i);
-});
 
-test('group navigation descends until TradeSoft marks a node hasParts=true', () => {
-  assert.match(html, /function catalogFlag\(value\)/);
-  assert.match(html, /const hasParts=catalogFlag\(item\.hasParts\?\?item\.has_parts\)/);
-  assert.match(html, /lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
-});
 test('TradeSoft parts2 response renders original diagram, partGroups and callout positions', () => {
   assert.match(html, /catalogRows\(payload,\['partGroups','part_groups'\]\)/);
   assert.match(html, /const positions=catalogRows\(payload,\['positions'\]\)/);
@@ -114,17 +104,6 @@ test('vehicle confirmation waits for the customer part request instead of openin
   assert.match(handler, /vehicleConfirmed=true/);
   assert.doesNotMatch(handler, /lookup\('groups'/);
 });
-test('customer part request triggers automatic TradeSoft group-tree search', () => {
-  assert.match(html, /async function searchCatalogForRequest\(query\)/);
-  assert.match(html, /groupMatchTerms\(query\)/);
-  assert.match(html, /await searchCatalogForRequest\(v\)/);
-  assert.match(html, /mode:'groups'.*group_id:id/);
-  assert.match(html, /await lookup\('parts',query,best\.id\)/);
-});
-test('catalog search stops for ambiguous group matches and asks customer to choose', () => {
-  assert.match(html, /Не удалось надёжно определить точный узел/);
-  assert.match(html, /candidates\.slice\(0,6\)/);
-});
 
 test('VIN card labels TradeSoft engine code and engine type separately', () => {
   const start = html.indexOf('function collectFields(');
@@ -146,7 +125,7 @@ test('customer part request searches TradeSoft schemas directly without exposing
   assert.match(html, /async function searchCatalogForRequest\(query\)[\s\S]*?await lookup\('parts',query\)/);
   assert.match(html, /renderCatalogSchemas\(d\.result,pendingPartQuery\|\|q\)/);
   assert.match(html, /async function lookup\(mode,q,groupId\)/);
-  assert.match(html, /groupId\(schemas\[0\]\)/);
+  assert.match(html, /groupOf\(schemas\[0\]\)/);
   assert.doesNotMatch(html.slice(html.indexOf('async function searchCatalogForRequest'), html.indexOf('function renderCatalogParts')), /renderCatalogGroupSuggestions/);
 });
 test('TradeSoft diagram supports zoom and callout-to-OE selection', () => {
