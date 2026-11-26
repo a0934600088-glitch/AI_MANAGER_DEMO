@@ -477,10 +477,15 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
                 raise TradesoftError("not_configured", "TradeSoft is not configured.")
             rows = await TRADESOFT_ADAPTER.decode(vin, "vin", payload.lang)
             elapsed = (asyncio.get_running_loop().time() - started) * 1000
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
             if len(rows) != 1:
+                await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
                 return {"provider": "tradesoft_parts_catalogs", "status": "ambiguous", "data": rows, "elapsed_ms": elapsed}
-            return {"provider": "tradesoft_parts_catalogs", "status": "success", "data": _normalize_tradesoft_vehicle(rows[0]), "elapsed_ms": elapsed}
+            vehicle = _normalize_tradesoft_vehicle(rows[0])
+            if vehicle.get("catalogId") is None or vehicle.get("carId") is None:
+                await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"))
+                return {"provider": "tradesoft_parts_catalogs", "status": "invalid_vehicle_record", "error": "TradeSoft VIN record has no catalogue identity.", "elapsed_ms": elapsed}
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
+            return {"provider": "tradesoft_parts_catalogs", "status": "success", "data": vehicle, "elapsed_ms": elapsed}
         except Exception as exc:
             elapsed = (asyncio.get_running_loop().time() - started) * 1000
             code = getattr(exc, "code", "unavailable")
