@@ -245,7 +245,7 @@ async function send(){
  if(!vehicleConfirmed){pendingPartQuery=v;add('Запрос сохранён: '+v+'. Теперь нажмите «'+t('confirm')+'» в карточке автомобиля. После подтверждения открою группы оригинального каталога.','bot','system');return}
  if(!catalogVerified){add('Для этого VIN не подтверждён OEM-каталог. Поиск деталей остановлен, чтобы не выдать несовместимую запчасть.','bot','system');return}
  pendingPartQuery=v;
- add('Запрос принят. Ищу соответствующий узел в оригинальном каталоге TradeSoft…','bot','good');
+ add('Запрос принят. Оригинальный каталог TradeSoft: ищу схему узла по названию детали…','bot','good');
  await searchCatalogForRequest(v)
 }
 function resizeInput(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,150)+'px'}
