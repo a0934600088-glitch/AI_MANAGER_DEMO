@@ -30,7 +30,7 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
   assert.equal(fields['Марка'], 'VOLKSWAGEN');
   assert.equal(fields['Модель'], 'Golf/Variant/4Motion');
   assert.equal(fields['Год выпуска'], '2018');
-  assert.equal(fields['Двигатель'], '1600CC / 115hp / 85kW TDI CR');
+  assert.equal(fields['Характеристики двигателя'], '1600CC / 115hp / 85kW TDI CR');
   assert.equal(fields['Трансмиссия'], 'SSV(7A)');
 });
 
@@ -60,8 +60,8 @@ test('ambiguous VIN and catalogue results stop automatic selection', () => {
 });
 
 test('vehicle confirmation starts the real TradeSoft group navigation', () => {
-  assert.match(html, /yes\.onclick=async\(\)=>\{vehicleConfirmed=true/);
-  assert.match(html, /if\(catalogVerified\)await lookup\('groups',''\)/);
+  assert.match(html, /yes\.onclick=\(\)=>\{vehicleConfirmed=true/);
+  assert.match(html, /Автомобиль подтверждён\. Теперь напишите нужную запчасть/);
   assert.match(html, /api\('\/api\/catalog\/v1\/lookup',request\)/);
 });
 test('catalog groups select a provider group ID and request its real parts', () => {
@@ -73,7 +73,7 @@ test('catalog groups select a provider group ID and request its real parts', () 
   assert.match(html, /callout/);
 });
 test('empty provider responses are reported without synthetic catalogue fixtures', () => {
-  assert.match(html, /TradeSoft подтвердил автомобиль, но не вернул список каталожных групп/);
+  assert.match(html, /TradeSoft не вернул группы оригинального каталога/);
   assert.match(html, /TradeSoft не вернул позиции деталей для выбранной группы/);
   assert.doesNotMatch(html, /synthetic|fixture|demoPart/i);
 });
@@ -94,11 +94,34 @@ test('TradeSoft parts2 response renders original diagram, partGroups and callout
 test('part request is queued before vehicle confirmation instead of being discarded', () => {
   assert.match(html, /pendingPartQuery=v;add\('Запрос сохранён:/);
   assert.match(html, /if\(!vehicleConfirmed\)\{pendingPartQuery=v;/);
-  assert.match(html, /if\(catalogVerified\)await lookup\('groups',''\)/);
+  assert.match(html, /Автомобиль подтверждён\. Теперь напишите нужную запчасть/);
 });
 test('confirmed customer part request opens groups and carries query to the selected leaf', () => {
-  assert.match(html, /pendingPartQuery=v;[\s\S]*?await lookup\('groups',''\)/);
+  assert.match(html, /pendingPartQuery=v;[\s\S]*?await searchCatalogForRequest\(v\)/);
   assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
   assert.match(html, /request\.group_id=groupId/);
   assert.match(html, /pendingPartQuery=''/);
+});
+
+test('full TradeSoft vehicle response fields are preserved for the expanded VIN card', () => {
+  assert.match(html, /function collectFields\(obj,out=\{\},seen=new Set\(\),parent=''/);
+  assert.match(html, /hidden\.has\(normalized\)/);
+  assert.match(html, /Характеристики двигателя/);
+  assert.match(html, /productionYear/);
+});
+test('vehicle confirmation waits for the customer part request instead of opening the catalogue tree', () => {
+  const handler = html.slice(html.indexOf('yes.onclick='), html.indexOf('const no=', html.indexOf('yes.onclick=')));
+  assert.match(handler, /vehicleConfirmed=true/);
+  assert.doesNotMatch(handler, /lookup\('groups'/);
+});
+test('customer part request triggers automatic TradeSoft group-tree search', () => {
+  assert.match(html, /async function searchCatalogForRequest\(query\)/);
+  assert.match(html, /groupMatchTerms\(query\)/);
+  assert.match(html, /await searchCatalogForRequest\(v\)/);
+  assert.match(html, /mode:'groups'.*group_id:id/);
+  assert.match(html, /await lookup\('parts',query,best\.id\)/);
+});
+test('catalog search stops for ambiguous group matches and asks customer to choose', () => {
+  assert.match(html, /Не удалось надёжно определить точный узел/);
+  assert.match(html, /candidates\.slice\(0,6\)/);
 });

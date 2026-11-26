@@ -93,7 +93,7 @@ function fieldLabel(key){
  };
  return labels[key]?.[currentRequestLang]||key
 }
-function collectFields(obj,out={},seen=new Set()){if(!obj||typeof obj!=='object'||seen.has(obj))return out;seen.add(obj);const allowed={make:'Марка',manufacturer:'Производитель',manufacturer_name:'Производитель',manufacturerName:'Производитель',brand:'Марка',model:'Модель',title:'Модель',model_name:'Модель',modelName:'Модель',vehicle_name:'Модель',vehicleName:'Модель',model_description:'Модель',modelDescription:'Модель',model_variant:'Комплектация',modelVariant:'Комплектация',year:'Год выпуска',model_year:'Год выпуска',modelYear:'Год выпуска',production_year:'Год выпуска',productionYear:'Год выпуска',manufactured:'Год выпуска',trim:'Комплектация',series:'Серия',engine:'Двигатель',engine_code:'Код двигателя',engineCode:'Код двигателя',engine_info:'Двигатель',engineInfo:'Двигатель',displacement:'Объём двигателя',engineDisplacement:'Объём двигателя',fuel_type:'Топливо',fuelType:'Топливо',transmission:'Трансмиссия',gearbox:'Трансмиссия',body:'Кузов',body_type:'Тип кузова',bodyType:'Тип кузова',market:'Рынок',production_date:'Дата производства',productionDate:'Дата производства',date:'Дата производства',prod_range:'Период производства',production_range:'Период производства',productionRange:'Период производства',prodrange:'Период производства',framecolor:'Цвет кузова',frame_color:'Цвет кузова',frameColor:'Цвет кузова',trimcolor:'Цвет салона',trim_color:'Цвет салона',trimColor:'Цвет салона',vin:'VIN'};for(const[k,v]of Object.entries(obj)){if(allowed[k]&&['string','number'].includes(typeof v)&&String(v).trim())out[allowed[k]]=String(v);else if(v&&typeof v==='object')collectFields(v,out,seen)}return out}
+function collectFields(obj,out={},seen=new Set(),parent=''){if(!obj||typeof obj!=='object'||seen.has(obj))return out;seen.add(obj);const allowed={make:'Марка',manufacturer:'Производитель',manufacturer_name:'Производитель',manufacturerName:'Производитель',brand:'Марка',model:'Модель',title:parent?'Наименование модели':'Модель',model_name:'Модель',modelName:'Модель',vehicle_name:'Модель',vehicleName:'Модель',model_description:'Модель',modelDescription:'Модель',model_variant:'Комплектация',modelVariant:'Комплектация',year:'Год выпуска',model_year:'Год выпуска',modelYear:'Год выпуска',production_year:'Год выпуска',productionYear:'Год выпуска',manufactured:'Год выпуска',trim:'Комплектация',series:'Серия',engine:'Двигатель',engine_code:'Код двигателя',engineCode:'Код двигателя',engine_info:'Характеристики двигателя',engineInfo:'Характеристики двигателя',displacement:'Объём двигателя',engineDisplacement:'Объём двигателя',fuel_type:'Топливо',fuelType:'Топливо',transmission:'Трансмиссия',gearbox:'Трансмиссия',body:'Кузов',body_type:'Тип кузова',bodyType:'Тип кузова',market:'Рынок',production_date:'Дата производства',productionDate:'Дата производства',date:'Дата производства',prod_range:'Период производства',production_range:'Период производства',productionRange:'Период производства',prodrange:'Период производства',framecolor:'Цвет кузова',frame_color:'Цвет кузова',frameColor:'Цвет кузова',trimcolor:'Цвет салона',trim_color:'Цвет салона',trimColor:'Цвет салона',vin:'VIN'};const hidden=new Set(['catalogid','carid','criteria','provider','identifier','identifiertype','status','elapsedms','is_oem_catalog_verified','catalogverified']);const label=k=>allowed[k]||k.replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase());for(const[k,v]of Object.entries(obj)){const normalized=k.replace(/[_-]/g,'').toLowerCase();if(hidden.has(normalized))continue;if(['string','number','boolean'].includes(typeof v)&&String(v).trim()){const key=label(k);if(!out[key]||key==='Модель'||key==='Марка')out[key]=String(v)}else if(v&&typeof v==='object')collectFields(v,out,seen,k)}return out}
 function showVehicle(response){
  const d=response?.vehicle||response?.result?.vehicle||response?.result||response?.data||response;
  const fields=response?.normalizedFields&&typeof response.normalizedFields==='object'?{...response.normalizedFields}:collectFields(d);
@@ -110,7 +110,7 @@ function showVehicle(response){
  el.append(grid);
  const ask=document.createElement('div');ask.className='vehicle-confirm';ask.textContent=t('vehicleAsk');el.append(ask);
  const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
- const yes=document.createElement('button');yes.type='button';yes.textContent=t('confirm');yes.onclick=async()=>{vehicleConfirmed=true;vin=vehicleVin||vin;ask.textContent=t('vehicleDone');actions.remove();add(catalogVerified?'Автомобиль подтверждён. Запрашиваю реальные группы TradeSoft OEM-каталога…':'Автомобиль распознан, но подтверждённый OEM-каталог для него не найден. Подбор запчастей пока заблокирован.','bot',catalogVerified?'good':'system');trackEvent('vehicle_confirmed',{selection:'vehicle',catalog_verified:catalogVerified});if(catalogVerified)await lookup('groups','')};
+ const yes=document.createElement('button');yes.type='button';yes.textContent=t('confirm');yes.onclick=()=>{vehicleConfirmed=true;vin=vehicleVin||vin;ask.textContent=t('vehicleDone');actions.remove();add(catalogVerified?'Автомобиль подтверждён. Теперь напишите нужную запчасть — например, «передние тормозные колодки».':'Автомобиль распознан, но OEM-каталог не подтвердил его применимость. Подбор запчастей заблокирован.','bot',catalogVerified?'good':'system');trackEvent('vehicle_confirmed',{selection:'vehicle',catalog_verified:catalogVerified})};
  const no=document.createElement('button');no.type='button';no.className='secondary';no.textContent=t('reject');no.onclick=()=>{vehicleConfirmed=false;catalogVerified=false;vin=null;ask.textContent='Данные не подтверждены. Проверьте VIN и отправьте правильный номер.';$('input').value=vehicleVin||'';resizeInput();syncComposer();actions.remove()};
  actions.append(yes,no);el.append(actions);$('messages').append(el);scrollEnd();return true
 }
@@ -176,21 +176,56 @@ function catalogValue(item,keys){for(const key of keys){const value=item?.[key];
 function catalogFlag(value){return value===true||value===1||String(value).toLowerCase()==='true'||String(value)==='1'}
 function renderCatalogGroups(result){
  const rows=catalogRows(result?.groups);
- if(!rows.length){trackEvent('parts_selection_incomplete',{mode:'groups',reason:'empty_groups'});add('TradeSoft подтвердил автомобиль, но не вернул список каталожных групп. Это реальный ответ каталога, а не демонстрационные данные. Передайте VIN менеджеру для проверки доступа к каталогу.','bot','system');return}
- const el=document.createElement('div');el.className='msg';
- const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Оригинальный каталог TradeSoft — выберите узел';el.append(heading);
- if(pendingPartQuery){const request=document.createElement('div');request.className='muted';request.style.marginTop='6px';request.textContent='Ваш запрос: '+pendingPartQuery+'. Выберите узел каталога — затем покажу детали и OE-номера.';el.append(request)}
- rows.forEach((item,index)=>{
-  const id=catalogValue(item,['groupId','group_id','groupID','id','Id']);
-  const label=catalogValue(item,['name','title','description','groupName','group_name','text'])||('Каталожная группа '+(index+1));
-  const hasParts=catalogFlag(item.hasParts??item.has_parts),hasSubgroups=catalogFlag(item.hasSubgroups??item.has_subgroups);
-  const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='display:block;width:100%;text-align:left;margin-top:7px;white-space:normal';
-  button.textContent=(hasParts?'▣ ':'› ')+label+(hasParts?' · детали':' · подгруппы');
-  button.disabled=!id||(!hasParts&&!hasSubgroups);
-  if(id&&!button.disabled)button.onclick=()=>lookup(hasParts?'parts':'groups',pendingPartQuery,id);
-  el.append(button)
- });
- $('messages').append(el);scrollEnd()
+ if(!rows.length){trackEvent('parts_selection_incomplete',{mode:'groups',reason:'empty_groups'});add('TradeSoft не вернул группы оригинального каталога. Нельзя подменять ответ каталога предположением. Передайте запрос менеджеру или повторите позже.','bot','system');return}
+ renderCatalogGroupSuggestions(rows,'Не удалось однозначно найти нужный узел автоматически. Уточните раздел каталога:');
+}
+function groupLabel(item){return catalogValue(item,['name','title','description','groupName','group_name','text'])||'Каталожная группа'}
+function groupIdOf(item){return catalogValue(item,['groupId','group_id','groupID','id','Id'])}
+function groupMatchTerms(query){
+ const q=String(query||'').toLowerCase();const terms=[];
+ const addTerms=(items)=>items.forEach(x=>{if(!terms.includes(x))terms.push(x)});
+ if(/колод|brake\s*pad|pads?|гальмівн.*наклад|тормоз.*наклад/.test(q)){addTerms(['brake','pad','disc','колод','тормоз','гальм','наклад'])}
+ if(/тормоз|brake|гальм/.test(q)){addTerms(['brake',' тормоз','гальм','disc','caliper'])}
+ if(/передн|front/.test(q)){addTerms(['front','передн'])}
+ if(/задн|rear|back/.test(q)){addTerms(['rear','back','задн'])}
+ if(/амортиз|shock|strut/.test(q)){addTerms(['shock','strut','амортиз'])}
+ if(/сайлент|silent.?block|bushing|втулк/.test(q)){addTerms(['bush','silent','control arm','втулк','сайлент'])}
+ if(/рычаг|control arm|wishbone/.test(q)){addTerms(['control arm','wishbone','рычаг'])}
+ if(/масл.*фильтр|oil filter/.test(q)){addTerms(['oil','filter','масл','фильтр'])}
+ if(!terms.length)addTerms(q.split(/[^a-zа-яіїєґ0-9]+/i).filter(x=>x.length>2));
+ return terms.map(x=>x.trim()).filter(Boolean)
+}
+function scoreCatalogGroup(item,terms){const name=groupLabel(item).toLowerCase();let score=0;for(const term of terms)if(name.includes(term.toLowerCase()))score+=term.length>5?2:1;return score}
+function renderCatalogGroupSuggestions(rows,title){const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent=title;el.append(heading);rows.forEach((item,index)=>{const id=groupIdOf(item),label=groupLabel(item),hasParts=catalogFlag(item.hasParts??item.has_parts),hasSubgroups=catalogFlag(item.hasSubgroups??item.has_subgroups);const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='display:block;width:100%;text-align:left;margin-top:7px;white-space:normal';button.textContent=label+(hasParts?' · детали':hasSubgroups?' · подгруппы':'');button.disabled=!id||(!hasParts&&!hasSubgroups);if(!button.disabled)button.onclick=()=>lookup(hasParts?'parts':'groups',pendingPartQuery,id);el.append(button)});$('messages').append(el);scrollEnd()}
+async function searchCatalogForRequest(query){
+ const started=Date.now(),terms=groupMatchTerms(query),budget={calls:0,max:36},candidates=[];
+ async function walk(rows,path=[],depth=0){
+  if(depth>7||budget.calls>=budget.max)return;
+  const ranked=rows.map(item=>({item,score:scoreCatalogGroup(item,terms),label:groupLabel(item)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  for(const entry of ranked){
+   if(budget.calls>=budget.max)break;
+   const item=entry.item,id=groupIdOf(item),nextPath=[...path,entry.label];
+   if(!id)continue;
+   const hasParts=catalogFlag(item.hasParts??item.has_parts),hasSubgroups=catalogFlag(item.hasSubgroups??item.has_subgroups);
+   if(hasParts)candidates.push({id,label:entry.label,path:nextPath,score:entry.score+path.reduce((n,p)=>n+scoreCatalogGroup({name:p},terms),0)});
+   if(hasSubgroups&&depth<7){
+    budget.calls++;
+    try{const response=await api('/api/catalog/v1/lookup',{mode:'groups',vin,q:query,group_id:id,lang:currentRequestLang});const children=catalogRows(response?.result?.groups);if(children.length)await walk(children,nextPath,depth+1)}catch(e){trackEvent('parts_lookup_failed',{mode:'groups',status:e.status||0})}
+   }
+  }
+ }
+ let root;try{const response=await api('/api/catalog/v1/lookup',{mode:'groups',vin,q:query,lang:currentRequestLang});root=catalogRows(response?.result?.groups)}catch(e){throw e}
+ if(!root.length){add('TradeSoft не вернул группы каталога для этого автомобиля.','bot','system');return}
+ await walk(root);
+ candidates.sort((a,b)=>b.score-a.score);
+ const best=candidates[0];
+ if(best&&best.score>=2&&(!candidates[1]||best.score>candidates[1].score)){
+  add('Найден узел каталога: '+best.path.join(' → ')+'. Загружаю оригинальную схему и позиции TradeSoft…','bot','good');
+  await lookup('parts',query,best.id);return
+ }
+ const suggestions=(candidates.length?candidates.slice(0,6).map(x=>({id:x.id,name:x.path.join(' → '),hasParts:true})):root);
+ trackEvent('parts_selection_incomplete',{mode:'auto_group_search',reason:'ambiguous_group',calls:budget.calls,elapsed_ms:Date.now()-started});
+ renderCatalogGroupSuggestions(suggestions,'Не удалось надёжно определить точный узел по запросу «'+query+'». Выберите подходящий вариант:');
 }
 
 function renderCatalogParts(result){const payload=result?.parts??result;const groupRows=catalogRows(payload,['partGroups','part_groups']);const parts=groupRows.flatMap(group=>catalogRows(group?.parts,['parts','items','data','results']));const flatParts=parts.length?parts:catalogRows(payload,['parts','items','data','results','list']);const imageUrl=typeof payload?.img==='string'?(payload.img.startsWith('//')?'https:'+payload.img:payload.img):null;const positions=catalogRows(payload,['positions']);if(imageUrl){const shell=document.createElement('div');shell.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Оригинальная схема TradeSoft';shell.append(heading);const stage=document.createElement('div');stage.style.cssText='position:relative;width:100%;margin-top:8px;background:#fff;border-radius:8px;overflow:hidden';const img=document.createElement('img');img.src=imageUrl;img.alt='Оригинальная схема узла из TradeSoft';img.style.cssText='display:block;width:100%;height:auto';stage.append(img);const overlay=document.createElement('div');overlay.style.cssText='position:absolute;inset:0;pointer-events:none';stage.append(overlay);img.onload=()=>{overlay.innerHTML='';const w=img.naturalWidth||1,h=img.naturalHeight||1;positions.forEach(position=>{const coords=position.coordinates||position.coords;if(!Array.isArray(coords)||coords.length<2)return;const marker=document.createElement('button');marker.type='button';marker.textContent=String(position.number??position.positionNumber??'');marker.style.cssText='position:absolute;pointer-events:auto;transform:translate(-50%,-50%);padding:2px 5px;min-width:23px;border-radius:50%;font-size:10px;border:1px solid #111;background:#f6d365;color:#111;box-shadow:0 1px 4px #0009';marker.style.left=((Number(coords[0])+Number(coords[2]||0)/2)/w*100)+'%';marker.style.top=((Number(coords[1])+Number(coords[3]||0)/2)/h*100)+'%';marker.onclick=()=>{const part=flatParts.find(x=>String(x.positionNumber??x.position_number??x.callout??'')===String(position.number??position.positionNumber??''));if(part){const number=catalogValue(part,['number','oeNumber','oe_number','partNumber','part_number']);add('Выбрана позиция '+position.number+(number?' · OE '+number:''),'bot','good')}};overlay.append(marker)})};elAppendImage(shell,stage);$('messages').append(shell)}else showImages(payload);if(!flatParts.length){trackEvent('parts_selection_incomplete',{mode:'parts',reason:'empty_parts'});add('TradeSoft не вернул позиции деталей для выбранной группы. Номер OE не придумывается. Проверьте другую группу или передайте запрос менеджеру.','bot','system');return}const el=document.createElement('div');el.className='msg';const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Детали оригинального каталога TradeSoft';el.append(heading);flatParts.forEach((item,index)=>{const line=document.createElement('button');line.type='button';line.className='secondary';line.style.cssText='display:block;width:100%;text-align:left;margin-top:6px;white-space:normal';const name=catalogValue(item,['name','title','description','partName','part_name','text'])||('Позиция '+(index+1));const oe=catalogValue(item,['number','oeNumber','oe_number','oemNumber','oem_number','article','partNumber','part_number']);const callout=catalogValue(item,['positionNumber','position_number','callout','position']);line.textContent=name+(callout?' · позиция '+callout:'')+(oe?' · OE '+oe:'');line.onclick=()=>add('Выбрана деталь: '+name+(callout?' · позиция '+callout:'')+(oe?' · оригинальный номер '+oe:''),'bot','good');el.append(line)});$('messages').append(el);scrollEnd()}
@@ -210,8 +245,8 @@ async function send(){
  if(!vehicleConfirmed){pendingPartQuery=v;add('Запрос сохранён: '+v+'. Теперь нажмите «'+t('confirm')+'» в карточке автомобиля. После подтверждения открою группы оригинального каталога.','bot','system');return}
  if(!catalogVerified){add('Для этого VIN не подтверждён OEM-каталог. Поиск деталей остановлен, чтобы не выдать несовместимую запчасть.','bot','system');return}
  pendingPartQuery=v;
- add('Запрос принят. Выберите соответствующую группу оригинального каталога — после этого загружу детали, схему и OE-номера.','bot','good');
- await lookup('groups','')
+ add('Запрос принят. Оригинальный каталог TradeSoft: ищу схему узла по названию детали…','bot','good');
+ await searchCatalogForRequest(v)
 }
 function resizeInput(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,150)+'px'}
 $('input').addEventListener('input',()=>{const text=$('input').value.trim();if(text)autoSetLanguage(text);resizeInput();syncComposer()});$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});$('send').onclick=send;function syncComposer(){const hasText=$('input').value.trim().length>0;const hasAttachment=files.length>0;const showSend=hasText||hasAttachment;$('send').classList.toggle('hidden',!showSend);$('voiceBtn').classList.toggle('hidden',showSend);$('voiceBtn').title=recognitionActive?'Остановить диктовку':'Надиктовать текст'}syncComposer();
