@@ -35,6 +35,6 @@ AI Manager queries independent OEM sources in parallel where the operation is su
 - `POST /api/catalog/v1/lookup` — parallel parts/diagram lookup where supported
 - `GET /api/admin/analytics` — authenticated PostgreSQL analytics
 - `GET /api/admin/conversations` — authenticated conversation history
-- `GET /api/docs` — OpenAPI docs
+- `GET /docs` — OpenAPI docs
 
 The FastAPI backend serves the customer chat and admin assets from the same Railway origin. GitHub Pages remains a static demo surface; use the Railway app URL for backend-connected testing.
