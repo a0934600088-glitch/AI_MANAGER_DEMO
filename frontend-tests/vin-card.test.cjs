@@ -66,7 +66,7 @@ test('vehicle confirmation starts the real TradeSoft group navigation', () => {
 });
 test('catalog groups select a provider group ID and request its real parts', () => {
   assert.match(html, /function renderCatalogGroups\(result\)/);
-  assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups','',id\)/);
+  assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
   assert.match(html, /request\.group_id=groupId/);
   assert.match(html, /function renderCatalogParts\(result\)/);
   assert.match(html, /oeNumber/);
@@ -81,7 +81,7 @@ test('empty provider responses are reported without synthetic catalogue fixtures
 test('group navigation descends until TradeSoft marks a node hasParts=true', () => {
   assert.match(html, /function catalogFlag\(value\)/);
   assert.match(html, /const hasParts=catalogFlag\(item\.hasParts\?\?item\.has_parts\)/);
-  assert.match(html, /lookup\(hasParts\?'parts':'groups','',id\)/);
+  assert.match(html, /lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
 });
 test('TradeSoft parts2 response renders original diagram, partGroups and callout positions', () => {
   assert.match(html, /catalogRows\(payload,\['partGroups','part_groups'\]\)/);
