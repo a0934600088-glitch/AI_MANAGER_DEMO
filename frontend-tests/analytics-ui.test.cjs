@@ -35,6 +35,9 @@ test('analytics dashboard is separate and protected', () => {
   assert.match(admin, /Административная аналитика/);
   assert.match(admin, /api\/admin\/analytics/);
   assert.match(admin, /Authorization/);
+  assert.match(admin, /databaseStatus/);
+  assert.match(admin, /providerStatus/);
+  assert.match(admin, /analytics_database/);
   assert.match(backend, /@app.get\("\/api\/admin\/analytics"\)/);
   assert.match(backend, /def _authorize_admin/);
   assert.match(backend, /SoloCatalogMCPAdapter/);
