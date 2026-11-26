@@ -90,3 +90,15 @@ test('TradeSoft parts2 response renders original diagram, partGroups and callout
   assert.match(html, /payload\?\.img/);
   assert.ok(html.includes("v.startsWith('//')"));
 });
+
+test('part request is queued before vehicle confirmation instead of being discarded', () => {
+  assert.match(html, /pendingPartQuery=v;add\('Запрос сохранён:/);
+  assert.match(html, /if\(!vehicleConfirmed\)\{pendingPartQuery=v;/);
+  assert.match(html, /if\(catalogVerified\)await lookup\('groups',''\)/);
+});
+test('confirmed customer part request opens groups and carries query to the selected leaf', () => {
+  assert.match(html, /pendingPartQuery=v;[\s\S]*?await lookup\('groups',''\)/);
+  assert.match(html, /button\.onclick=\(\)=>lookup\(hasParts\?'parts':'groups',pendingPartQuery,id\)/);
+  assert.match(html, /request\.group_id=groupId/);
+  assert.match(html, /pendingPartQuery=''/);
+});
