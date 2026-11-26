@@ -30,7 +30,7 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
   assert.equal(fields['Марка'], 'VOLKSWAGEN');
   assert.equal(fields['Модель'], 'Golf/Variant/4Motion');
   assert.equal(fields['Год выпуска'], '2018');
-  assert.equal(fields['Характеристики двигателя'], '1600CC / 115hp / 85kW TDI CR');
+  assert.equal(fields['Тип двигателя'], '1600CC / 115hp / 85kW TDI CR');
   assert.equal(fields['Трансмиссия'], 'SSV(7A)');
 });
 
