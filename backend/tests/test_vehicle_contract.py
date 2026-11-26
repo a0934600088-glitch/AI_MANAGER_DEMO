@@ -93,6 +93,28 @@ class VehicleContractTests(unittest.TestCase):
         finally:
             main.TRADESOFT_ADAPTER = previous
 
+    def test_only_tradesoft_is_exposed_as_catalog_provider(self):
+        result = asyncio.run(main.providers())
+        self.assertEqual(result["configured"], int(main.TRADESOFT_ENABLED))
+        self.assertEqual([item["id"] for item in result["providers"]], ["tradesoft_parts_catalogs"])
+        self.assertEqual(result["primary_provider"], "tradesoft_parts_catalogs" if main.TRADESOFT_ENABLED else None)
+
+    def test_decode_requires_trade_soft_and_never_uses_external_fallback(self):
+        previous = main.TRADESOFT_ADAPTER
+        try:
+            main.TRADESOFT_ADAPTER = None
+            request = Request({
+                "type": "http", "method": "POST", "scheme": "https", "path": "/",
+                "raw_path": b"/", "query_string": b"", "headers": [],
+                "server": ("localhost", 443), "client": ("127.0.0.1", 1234), "root_path": "",
+            })
+            with self.assertRaises(HTTPException) as failure:
+                asyncio.run(main.decode_vehicle(main.DecodeRequest(vin="WVWZZZAUZJP594600"), request))
+            self.assertEqual(failure.exception.status_code, 503)
+            self.assertEqual(failure.exception.detail["provider"], "tradesoft_parts_catalogs")
+        finally:
+            main.TRADESOFT_ADAPTER = previous
+
     def test_admin_trace_endpoint_requires_configured_token(self):
         previous = main.ADMIN_API_TOKEN
         try:
