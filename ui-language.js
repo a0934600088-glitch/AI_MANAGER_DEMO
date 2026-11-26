@@ -50,8 +50,8 @@ const UK={
 const norm=s=>String(s).replace(/\s+/g,' ').trim();
 function apply(root,lang){
  if(!root||lang!=='ru'&&lang!=='uk')return;
- const dict=lang==='uk'?UK:null;
- if(!dict)return;
+ const RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru]));
+ const dict=lang==='uk'?UK:RU;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
  nodes.forEach(node=>{const old=norm(node.nodeValue);if(Object.prototype.hasOwnProperty.call(dict,old))node.nodeValue=node.nodeValue.replace(old,dict[old]);});
@@ -60,5 +60,24 @@ function apply(root,lang){
 }
 function preferred(){const saved=localStorage.getItem('ai-manager-ui-language');if(saved==='ru'||saved==='uk')return saved;return (navigator.language||'').toLowerCase().startsWith('uk')?'uk':'ru';}
 function set(lang,root=document){if(lang!=='ru'&&lang!=='uk')return;localStorage.setItem('ai-manager-ui-language',lang);document.documentElement.lang=lang;apply(root,lang);}
+let observer=null;
+function watch(lang){
+ if(observer)observer.disconnect();
+ observer=new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{
+  if(node.nodeType===Node.ELEMENT_NODE)apply(node,lang);
+  else if(node.nodeType===Node.TEXT_NODE){
+   const key=norm(node.nodeValue),RU=Object.fromEntries(Object.entries(UK).map(([ru,uk])=>[uk,ru])),dict=lang==='uk'?UK:RU;
+   if(Object.prototype.hasOwnProperty.call(dict,key))node.nodeValue=node.nodeValue.replace(key,dict[key]);
+  }
+ })));
+ observer.observe(document.body,{childList:true,subtree:true});
+}
+function set(lang,root=document){
+ if(lang!=='ru'&&lang!=='uk')return;
+ localStorage.setItem('ai-manager-ui-language',lang);
+ document.documentElement.lang=lang;
+ apply(root,lang);
+ if(root===document&&document.body)watch(lang);
+}
 global.AIManagerUiLanguage=Object.freeze({preferred,apply,set});
 })(window);
