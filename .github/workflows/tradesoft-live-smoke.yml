@@ -52,7 +52,21 @@ jobs:
             }
             return null;
           }
-          async function post(path, body) {
+          const flag = value => value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value) === '1';
+          async function findPartsLeaf(vin, groups, depth = 0) {
+            if (depth > 8) throw new Error('Catalogue group tree exceeds 8 levels');
+            const leaf = groups.find(x => flag(x.hasParts ?? x.has_parts) && groupId(x) !== null);
+            if (leaf) return leaf;
+            const parent = groups.find(x => flag(x.hasSubgroups ?? x.has_subgroups) && groupId(x) !== null);
+            if (!parent) throw new Error('No group with hasParts=true or expandable subgroups');
+            const nested = await post('/api/catalog/v1/lookup', {
+              vin, mode: 'groups', group_id: groupId(parent), lang: 'en'
+            }, 'nested groups');
+            const children = rows(nested.result?.groups);
+            if (!children.length) throw new Error('Subgroup request returned no child groups');
+            return findPartsLeaf(vin, children, depth + 1);
+          }
+          async function post(path, body, stage = path) {
             const response = await fetch(base + path, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
@@ -62,14 +76,15 @@ jobs:
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
               const detail = payload.detail || payload;
-              throw new Error(path + ' HTTP ' + response.status + ': ' +
+              throw new Error(stage + ' (' + path + ') HTTP ' + response.status + ': ' +
                 (typeof detail === 'string' ? detail : JSON.stringify(detail)).slice(0, 400));
             }
             return payload;
           }
           (async () => {
             for (const vehicle of vehicles) {
-              const decoded = await post('/api/catalog/v1/vehicles/decode', { vin: vehicle.vin, lang: 'en' });
+              const decoded = await post('/api/catalog/v1/vehicles/decode', { vin: vehicle.vin, lang: 'en' }, vehicle.label + ' VIN decode');
+              console.log(vehicle.label + ': VIN decoded by live provider');
               if (decoded.status !== 'success' || decoded.is_oem_catalog_verified !== true) {
                 throw new Error(vehicle.label + ': VIN was not uniquely verified by TradeSoft');
               }
@@ -77,26 +92,29 @@ jobs:
               if (car.catalogId == null || car.carId == null) {
                 throw new Error(vehicle.label + ': TradeSoft response has no catalogId/carId');
               }
-              const grouped = await post('/api/catalog/v1/lookup', { vin: vehicle.vin, mode: 'groups', lang: 'en' });
+              const grouped = await post('/api/catalog/v1/lookup', { vin: vehicle.vin, mode: 'groups', lang: 'en' }, vehicle.label + ' root groups');
               const groups = rows(grouped.result?.groups);
               if (grouped.status !== 'success' || !groups.length) {
                 throw new Error(vehicle.label + ': TradeSoft returned no catalogue groups');
               }
-              const selected = groups.find(x => groupId(x) !== null);
-              if (!selected) throw new Error(vehicle.label + ': group response contains no selectable group ID');
+              const selected = await findPartsLeaf(vehicle.vin, groups);
+              console.log(vehicle.label + ': navigated to leaf group ' + groupId(selected));
               const partsResponse = await post('/api/catalog/v1/lookup', {
                 vin: vehicle.vin, mode: 'parts', group_id: groupId(selected), lang: 'en'
-              });
-              const parts = rows(partsResponse.result?.parts);
+              }, vehicle.label + ' parts2 leaf group');
+              const partGroups = rows(partsResponse.result?.parts?.partGroups);
+              const parts = partGroups.flatMap(group => rows(group.parts));
               if (partsResponse.status !== 'success' || !parts.length) {
                 throw new Error(vehicle.label + ': selected group returned no OEM part records');
               }
               const oeCount = parts.filter(x =>
-                ['oeNumber', 'oe_number', 'oemNumber', 'oem_number', 'partNumber', 'part_number']
+                ['number', 'oeNumber', 'oe_number', 'oemNumber', 'oem_number', 'partNumber', 'part_number']
                   .some(k => x[k] !== undefined && x[k] !== null && String(x[k]).trim())
               ).length;
-              console.log(vehicle.label + ': LIVE TradeSoft OK; groups=' + groups.length +
-                '; parts=' + parts.length + '; records_with_OE=' + oeCount);
+              console.log(vehicle.label + ': LIVE TradeSoft OK; root_groups=' + groups.length +
+                '; parts=' + parts.length + '; records_with_OE=' + oeCount +
+                '; diagram=' + Boolean(partsResponse.result?.parts?.img) +
+                '; positions=' + rows(partsResponse.result?.parts?.positions).length);
             }
           })().catch(error => { console.error(error.message); process.exit(1); });
           NODE
