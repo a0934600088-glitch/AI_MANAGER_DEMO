@@ -30,7 +30,7 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
   assert.equal(fields['Марка'], 'VOLKSWAGEN');
   assert.equal(fields['Модель'], 'Golf/Variant/4Motion');
   assert.equal(fields['Год выпуска'], '2018');
-  assert.equal(fields['Характеристики двигателя'], '1600CC / 115hp / 85kW TDI CR');
+  assert.equal(fields['Тип двигателя'], '1600CC / 115hp / 85kW TDI CR');
   assert.equal(fields['Трансмиссия'], 'SSV(7A)');
 });
 
@@ -106,7 +106,7 @@ test('confirmed customer part request opens groups and carries query to the sele
 test('full TradeSoft vehicle response fields are preserved for the expanded VIN card', () => {
   assert.match(html, /function collectFields\(obj,out=\{\},seen=new Set\(\),parent=''/);
   assert.match(html, /hidden\.has\(normalized\)/);
-  assert.match(html, /Характеристики двигателя/);
+  assert.match(html, /Тип двигателя/);
   assert.match(html, /productionYear/);
 });
 test('vehicle confirmation waits for the customer part request instead of opening the catalogue tree', () => {
@@ -124,4 +124,20 @@ test('customer part request triggers automatic TradeSoft group-tree search', () 
 test('catalog search stops for ambiguous group matches and asks customer to choose', () => {
   assert.match(html, /Не удалось надёжно определить точный узел/);
   assert.match(html, /candidates\.slice\(0,6\)/);
+});
+
+test('VIN card labels TradeSoft engine code and engine type separately', () => {
+  const start = html.indexOf('function collectFields(');
+  const end = html.indexOf('\\nfunction showVehicle(', start);
+  const source = html.slice(start, end);
+  assert.match(source, /engine:'Код двигателя'/);
+  assert.match(source, /engine_info:'Тип двигателя'/);
+  assert.match(source, /engine_type:'Тип двигателя'/);
+  assert.match(source, /engineInfo:'Тип двигателя'/);
+  assert.match(html, /'Код двигателя','Тип двигателя','Объём двигателя'/);
+});
+test('VIN card keeps the engine type value from the supplied TradeSoft template', () => {
+  const collect = html.slice(html.indexOf('function collectFields('), html.indexOf('\\nfunction showVehicle('));
+  assert.match(collect, /engine_info:'Тип двигателя'/);
+  assert.match(collect, /engine:'Код двигателя'/);
 });
