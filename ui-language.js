@@ -59,7 +59,6 @@ function apply(root,lang){
  root.querySelectorAll?.('*').forEach(el=>attrs.forEach(attr=>{const val=el.getAttribute(attr);if(val&&Object.prototype.hasOwnProperty.call(dict,norm(val)))el.setAttribute(attr,dict[norm(val)]);}));
 }
 function preferred(){const saved=localStorage.getItem('ai-manager-ui-language');if(saved==='ru'||saved==='uk')return saved;return (navigator.language||'').toLowerCase().startsWith('uk')?'uk':'ru';}
-function set(lang,root=document){if(lang!=='ru'&&lang!=='uk')return;localStorage.setItem('ai-manager-ui-language',lang);document.documentElement.lang=lang;apply(root,lang);}
 let observer=null;
 function watch(lang){
  if(observer)observer.disconnect();
