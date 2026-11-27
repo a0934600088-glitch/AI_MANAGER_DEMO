@@ -64,9 +64,10 @@ jobs:
               const envelopeGroup = result.schemas?.group || {};
               const treeResult = await post({vin, mode:'groups', lang:'ru'}, query + ' root groups');
               const rootGroups = rows(treeResult.groups);
+              const isShockQuery = /амортиз|shock|strut/.test(query.toLowerCase());
               const targetRoot = rootGroups.find(group => {
                 const name = String(group.name || '').toLowerCase();
-                return /колод|тормоз|brake|диск|амортиз|подвес|shock|strut/.test(name);
+                return isShockQuery ? /подвес|suspension|chassis/.test(name) : /тормоз|brake/.test(name);
               });
               if (!targetRoot) throw new Error(query + ': no matching top-level groups2 category');
               const leaves = [];
