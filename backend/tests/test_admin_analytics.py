@@ -95,6 +95,19 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         self.assertEqual(result["scope"], "tenant:19")
         summary.assert_called_once_with(90, "19")
 
+    def test_shop_admin_cannot_create_another_shop_admin(self):
+        payload = main.TenantUserCreateRequest(
+            username="second-admin", display_name="Second admin",
+            password="long-enough-password", role="shop_admin",
+        )
+        with patch("app.main.auth.create_user") as create_user:
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(main.admin_create_tenant_user(
+                    12, payload, {"role": "shop_admin", "tenant_id": 12}
+                ))
+        self.assertEqual(error.exception.status_code, 403)
+        create_user.assert_not_called()
+
     def test_unknown_role_cannot_open_analytics(self):
         with self.assertRaises(HTTPException) as error:
             asyncio.run(main.admin_analytics(30, {"role": "unknown", "tenant_id": 1}))
