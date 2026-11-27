@@ -31,7 +31,7 @@ The backend preserves the provider's `catalogId`, `carId` and `criteria` values.
 - `GET /api/catalog/v1/providers` — active TradeSoft provider and nine reserved slots.
 - `POST /api/catalog/v1/vehicles/decode` — real TradeSoft VIN decode.
 - `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests. For `parts`, send `group_id` after selecting a group to retrieve OE part numbers and diagram callouts; without `group_id`, `q` searches schemas by part name.
-- `GET /api/admin/traces` — recent provider request trace; requires the `X-Admin-Token` header and a server-side `ADMIN_API_TOKEN`.
+- `GET /api/admin/traces` — recent provider request trace; requires a valid bearer session for the `super_admin` role.
 - `GET /docs` — interactive API documentation.
 
 ## Request examples
@@ -77,7 +77,8 @@ A successful health check confirms only that the FastAPI process is running. A s
 
 ## Security configuration
 
-- `ADMIN_API_TOKEN` — required server-side secret for the diagnostic trace endpoint. Without it, the endpoint is disabled; never place this token in frontend JavaScript or commit it to Git.
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — server-side bootstrap credentials for the first platform administrator. The password is hashed before storage.
+- `ADMIN_API_TOKEN` — retained only for a legacy helper; the current trace route uses bearer-session authorization.
 - `CORS_ORIGINS` — comma-separated exact origins. Set `TENANT_CORS_ENABLED=true` only when tenant widgets must run on external shop domains; tenant-key requests are separately checked against the configured domain allowlist. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
 - Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
@@ -95,13 +96,16 @@ A successful health check confirms only that the FastAPI process is running. A s
 
 
 
-The `feature/tenant-auth-rbac` branch introduces database-backed identities and session endpoints:
-- `POST /api/auth/login` — verifies a configured/bootstrap administrator or a provisioned tenant user and returns an opaque bearer token.
-- `GET /api/auth/me` — returns the authenticated account and role.
-- `POST /api/auth/logout` — revokes the presented session.
-- `POST /api/admin/tenants` — super-admin-only tenant creation.
-- `POST /api/admin/tenants/{tenant_id}/users` — creates shop-admin, manager, or observer accounts, with tenant binding enforced server-side.
+## Authentication and authorization
 
-On first successful login, the backend creates the initial `super_admin` account from the existing server-only `ADMIN_USERNAME` and `ADMIN_PASSWORD` variables. The password is hashed with scrypt; only a SHA-256 digest of each random session token is stored. Tenant users require passwords of at least 12 characters.
+- Bearer sessions are database-backed, opaque, expire after seven days, and are revocable.
+- Roles are `super_admin`, `shop_admin`, `manager`, and `observer`.
+- Tenant staff are bound to one tenant in the database. Shop administrators can manage staff only in their own shop and cannot create another shop administrator. Managers and observers cannot manage staff or platform tenants.
+- Analytics and conversation summaries always query using the server-derived tenant scope for shop users. The super administrator's legacy overview remains scoped to the legacy `default` demo data.
 
-**This remains a staging implementation, not a production-ready release.** The administrator and manager login surfaces now use bearer sessions; analytics and conversation queries are filtered by the authenticated tenant; the administrator UI can create tenants and provision staff accounts. The legacy customer widget still records anonymous analytics into the shared `default` demo scope. Tenant-specific customer event ingestion through per-tenant public keys and domain validation is not implemented yet, so new tenant dashboards will correctly show no customer activity rather than leaking the demo tenant's events. Session rate limiting / lockout, database-backed integration tests for cross-tenant reads and writes, production migration review, and deployment verification remain blockers. Do not use this branch for production accounts or customer data.
+## Release limitations
+
+- PostgreSQL integration tests run in CI against an ephemeral PostgreSQL 16 service and verify two-tenant event/conversation isolation plus tenant-key/domain binding.
+- Production migration rehearsal, backup/restore validation and post-deployment smoke tests have not yet been performed.
+- Session rate limiting, lockout, invitation email flow, durable customer profiles and full chat transcripts are not implemented.
+- This release isolates existing analytics and request telemetry; it is not a complete CRM/customer-history implementation.
