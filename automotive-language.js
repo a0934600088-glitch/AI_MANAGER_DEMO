@@ -83,8 +83,9 @@
     if(!original)return '';
     const found=matchTerms(original), aliases=[];
     const source=norm(original);
-    const axle=/(^|\s)(задн\w*|rear|back)(\s|$)/i.test(source)?{ru:'задний',uk:'задній',en:'rear'}:
-      (/(^|\s)(передн\w*|front)(\s|$)/i.test(source)?{ru:'передний',uk:'передній',en:'front'}:null);
+    const pluralPart=/(колодк|диск|амортизатор|стойк|сайлентблок|рычаг|подшипник|свеч|форсунк|гальмівн)/i.test(source);
+    const axle=/(задн|rear|back)/i.test(source)?{ru:pluralPart?'задние':'задний',uk:pluralPart?'задні':'задній',en:'rear'}:
+      (/(передн|front)/i.test(source)?{ru:pluralPart?'передние':'передний',uk:pluralPart?'передні':'передній',en:'front'}:null);
     const brakeContext=/(тормоз|гальм|brake|суппорт|супорт)/i.test(source);
     found.forEach(row=>{
       if(row.id==='engine_piston'&&brakeContext)return;
