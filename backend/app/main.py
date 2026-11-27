@@ -304,11 +304,8 @@ def _authorize_admin(credentials: HTTPBasicCredentials | None = None, x_admin_to
 
 
 @app.get("/api/admin/traces")
-async def admin_traces(
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_traces(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
     return {
         "events": list(TRACE_EVENTS),
         "retained": len(TRACE_EVENTS),
@@ -337,32 +334,26 @@ async def analytics_event(
 
 
 @app.get("/api/admin/analytics")
-async def admin_analytics(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_analytics(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        return await asyncio.to_thread(analytics.dashboard_summary, days)
+        return await asyncio.to_thread(analytics.dashboard_summary, days, tenant_id)
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
 
 @app.get("/api/admin/conversations")
-async def admin_conversations(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_conversations(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        rows = await asyncio.to_thread(analytics.conversation_summary, days)
-        return {"conversations": rows}
+        rows = await asyncio.to_thread(analytics.conversation_summary, days, tenant_id)
+        return {"conversations": rows, "scope": "tenant:" + tenant_id}
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
