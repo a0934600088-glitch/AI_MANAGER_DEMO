@@ -1,4 +1,4 @@
-# AI Manager Catalog API — v2.4.10
+# AI Manager Catalog API — v2.4.20
 
 FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
