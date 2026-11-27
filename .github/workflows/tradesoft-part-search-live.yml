@@ -80,6 +80,10 @@ jobs:
                 throw new Error(item.q + ': no complete original TradeSoft diagram, positions and parts');
               }
               if (schema.img && normalizeImage(schema.img) !== normalizeImage(diagram.img)) {
+                console.error('Schema/parts2 image diagnostic: ' + JSON.stringify({
+                  query:item.q, schemaImage:schema.img, selectedSchemaImage:selected.selectedSchema?.img,
+                  partsImage:diagram.img, resolvedGroupId:selected.resolvedGroupId
+                }));
                 throw new Error(item.q + ': selected parts2 diagram does not match the chosen schema image');
               }
               const oeCount = parts.filter(part =>
