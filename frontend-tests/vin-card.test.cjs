@@ -119,15 +119,15 @@ test('rejecting or replacing a VIN clears a queued request from the previous veh
   assert.match(reject, /pendingPartQuery=''/);
 });
 
-test('brake pad axle cards use explicit front and rear customer labels', () => {
+test('brake queries retain explicit verified front and rear system cards', () => {
   const start = html.indexOf('function renderCatalogSchemas(');
-  const end = html.indexOf('\n\nasync function lookup(', start);
+  const end = html.indexOf('\\n\\nasync function lookup(', start);
   const renderer = html.slice(start, end);
-  assert.match(renderer, /Передние тормозные колодки/);
-  assert.match(renderer, /Задние тормозные колодки/);
-  assert.match(renderer, /schema\.axle==='front'\|\|schema\.axle==='rear'/);
+  assert.match(renderer, /id:'front_brake',title:'Передняя тормозная система'/);
+  assert.match(renderer, /id:'rear_brake',title:'Задняя тормозная система'/);
+  assert.match(renderer, /schema\\.catalogCategory===category\\.id/);
+  assert.doesNotMatch(renderer, /const classified=schemas\\.filter\\(schema=>schema\\.axle/);
 });
-
 test('VIN card labels TradeSoft engine code and engine type separately', () => {
   const start = html.indexOf('function collectFields(');
   const end = html.indexOf('\\nfunction showVehicle(', start);
