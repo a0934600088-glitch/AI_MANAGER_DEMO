@@ -115,6 +115,7 @@ class VehicleContractTests(unittest.TestCase):
             if middleware.cls.__name__ == "CORSMiddleware"
         )
         allowed_headers = [header.lower() for header in cors.kwargs["allow_headers"]]
+        self.assertIn("x-tenant-key", allowed_headers)
         self.assertIn("x-admin-token", allowed_headers)
 
     def test_catalogue_lookup_preserves_ambiguous_provider_status(self):
