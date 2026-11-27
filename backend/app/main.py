@@ -672,7 +672,8 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
         status = "ambiguous" if isinstance(result, dict) and result.get("status") == "ambiguous" else "success"
         await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("OEM catalogue lookup", "tradesoft_parts_catalogs", status, "TradeSoft OEM catalogue lookup completed", {
-            "mode": payload.mode, "catalog_verified": True,\n            "query": payload.q[:600] if payload.q else None,
+            "mode": payload.mode, "catalog_verified": True,
+            "query": payload.q[:600] if payload.q else None,
         })
         catalog_result = {
             "provider": "tradesoft_parts_catalogs",
@@ -693,7 +694,8 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status_code = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
         await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
-        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "error", str(exc)[:240], {\n            "mode": payload.mode, "query": payload.q[:600] if payload.q else None,\n        })
+        trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "error", str(exc)[:240], {
+            "mode": payload.mode, "query": payload.q[:600] if payload.q else None,\n        })
         raise HTTPException(status_code=status_code, detail={
             "provider": "tradesoft_parts_catalogs",
             "status": getattr(exc, "code", "unavailable"),
