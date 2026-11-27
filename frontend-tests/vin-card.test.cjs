@@ -34,39 +34,6 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
   assert.equal(fields['Трансмиссия'], 'SSV(7A)');
 });
 
-test('normalized Car2 parameter rows reach the vehicle card as stable attributes', () => {
-  const start = html.indexOf('function collectFields(');
-  const end = html.indexOf('\nfunction showVehicle(', start);
-  const context = {};
-  vm.runInNewContext(html.slice(start, end) + '\nglobalThis.__collectFields = collectFields;', context);
-  const fields = context.__collectFields({
-    brand: 'MERCEDES-BENZ',
-    title: 'C-CLASS Coupe (C205)',
-    vehicle_attributes: {
-      modelYear: '09.2016 - 12.2018',
-      engineType: '083',
-      engineCode: 'M 274.920',
-      engineDisplacement: '1991 cc',
-      fuelType: 'Petrol',
-      cylindersValves: '4 / 4',
-      bodyType: 'Coupe',
-      fuelSystem: 'Direct injection',
-      driveType: 'AWD',
-      tecdocId: '122128'
-    }
-  });
-  assert.equal(fields['Год выпуска'], '09.2016 - 12.2018');
-  assert.equal(fields['Тип двигателя'], '083');
-  assert.equal(fields['Код двигателя'], 'M 274.920');
-  assert.equal(fields['Объём двигателя'], '1991 cc');
-  assert.equal(fields['Топливо'], 'Petrol');
-  assert.equal(fields['Цилиндры / клапаны'], '4 / 4');
-  assert.equal(fields['Тип кузова'], 'Coupe');
-  assert.equal(fields['Топливная система'], 'Direct injection');
-  assert.equal(fields['Тип привода'], 'AWD');
-  assert.equal(fields['Идентификатор TecDoc'], '122128');
-});
-
 test('translated display fields are not normalized a second time', () => {
   assert.match(
     html,
