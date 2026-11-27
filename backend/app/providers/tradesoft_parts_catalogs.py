@@ -37,6 +37,8 @@ class TradesoftPartsCatalogsAdapter:
         self._timeout = timeout_seconds
         self._client: httpx.AsyncClient | None = None
         self._cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        # VIN catalogue hierarchy is shared by all part-name searches for this vehicle.
+        self._catalog_paths_cache: dict[str, tuple[float, dict[str, list[list[str]]]]] = {}
         self._lock = asyncio.Lock()
 
     async def close(self) -> None:
@@ -307,7 +309,12 @@ class TradesoftPartsCatalogsAdapter:
         schemas: list[dict[str, Any]],
         lang: str,
     ) -> dict[str, list[list[str]]]:
-        """Map returned schema images to their VIN-specific groups2 ancestry."""
+        """Map schema images to VIN-specific groups2 ancestry.
+
+        The hierarchy is shared across part-name searches for the same vehicle,
+        so cache the image-to-path index briefly. Fetch each tree level with
+        bounded concurrency instead of making hundreds of serial HTTP requests.
+        """
         wanted = {
             self._image_key(schema.get("img"))
             for schema in schemas
@@ -315,45 +322,77 @@ class TradesoftPartsCatalogsAdapter:
         }
         if not wanted:
             return {}
+
+        cache_key = "|".join((
+            str(catalog_id),
+            str(base_params.get("carId", "")),
+            str(base_params.get("criteria", "")),
+        ))
+        cached = self._catalog_paths_cache.get(cache_key)
+        if cached and cached[0] > time.monotonic():
+            return {key: cached[1][key] for key in wanted if key in cached[1]}
+
         roots_payload = await self._get(
             f"/catalogs/{catalog_id}/groups2/", dict(base_params), lang
         )
-        roots = self._rows(roots_payload)
+        frontier: list[tuple[dict[str, Any], list[str], int]] = [
+            (root, [], 0) for root in self._rows(roots_payload)
+        ]
         matches: dict[str, list[list[str]]] = {}
         visited: set[str] = set()
         visited_count = 0
+        semaphore = asyncio.Semaphore(8)
 
-        async def walk(group: dict[str, Any], parent_path: list[str], depth: int = 0) -> None:
-            nonlocal visited_count
-            if depth > 8 or visited_count >= 500:
-                return
-            group_id = self._schema_group_id(group)
-            if group_id is None:
-                return
-            key = str(group_id)
-            if key in visited:
-                return
-            visited.add(key)
-            visited_count += 1
-            name = str(group.get("name") or group.get("title") or group.get("description") or "").strip()
-            path = parent_path + ([name] if name else [])
-            image_key = self._image_key(group.get("img"))
-            if image_key in wanted:
-                matches.setdefault(image_key, []).append(path)
-            subgroup_hint = group.get("hasSubgroups", group.get("has_subgroups"))
-            if subgroup_hint is not None and not self._truthy(subgroup_hint):
-                return
-            child_params = dict(base_params)
-            child_params["groupId"] = group_id
-            children_payload = await self._get(
-                f"/catalogs/{catalog_id}/groups2/", child_params, lang
-            )
-            for child in self._rows(children_payload):
-                await walk(child, path, depth + 1)
+        async def load_children(
+            group_id: Any, depth: int, path: list[str]
+        ) -> list[tuple[dict[str, Any], list[str], int]]:
+            params = dict(base_params)
+            params["groupId"] = group_id
+            async with semaphore:
+                payload = await self._get(
+                    f"/catalogs/{catalog_id}/groups2/", params, lang
+                )
+            return [(child, path, depth) for child in self._rows(payload)]
 
-        for root in roots:
-            await walk(root, [])
-        return matches
+        while frontier and visited_count < 500:
+            next_frontier: list[tuple[dict[str, Any], list[str], int]] = []
+            child_tasks = []
+            for group, parent_path, depth in frontier:
+                if depth > 8 or visited_count >= 500:
+                    continue
+                group_id = self._schema_group_id(group)
+                if group_id is None:
+                    continue
+                key = str(group_id)
+                if key in visited:
+                    continue
+                visited.add(key)
+                visited_count += 1
+
+                name = str(
+                    group.get("name") or group.get("title") or group.get("description") or ""
+                ).strip()
+                path = parent_path + ([name] if name else [])
+                image_key = self._image_key(group.get("img"))
+                if image_key:
+                    matches.setdefault(image_key, []).append(path)
+
+                subgroup_hint = group.get("hasSubgroups", group.get("has_subgroups"))
+                has_subgroups = subgroup_hint is None or self._truthy(subgroup_hint)
+                if has_subgroups and depth < 8 and visited_count < 500:
+                    child_tasks.append(load_children(group_id, depth + 1, path))
+
+            if child_tasks:
+                batches = await asyncio.gather(*child_tasks)
+                for batch in batches:
+                    next_frontier.extend(batch)
+            frontier = next_frontier
+
+        if len(self._catalog_paths_cache) >= 128:
+            oldest = min(self._catalog_paths_cache, key=lambda key: self._catalog_paths_cache[key][0])
+            self._catalog_paths_cache.pop(oldest, None)
+        self._catalog_paths_cache[cache_key] = (time.monotonic() + 300, matches)
+        return {key: matches[key] for key in wanted if key in matches}
 
     async def _groups_matching_schema_image(
         self,
