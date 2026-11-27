@@ -710,18 +710,18 @@ class TradesoftPartsCatalogsAdapter:
         suggestions, schemas, schema_rows = await self._search_schemas(
             catalog_id, car_id, part_query, lang
         )
-        # A multi-result search must be reduced using the VIN-specific catalogue
-        # hierarchy, not by guessing from generic labels such as "Disc brake 3".
-        schema_paths: dict[str, list[list[str]]] = {}
-        if len(schema_rows) > 1:
-            schema_paths = await self._schema_catalog_paths(
-                catalog_id, base_params, schema_rows, lang
-            )
+        # A multi-result search, and every brake search (even a single schema),
+        # needs VIN-specific hierarchy labels before we classify the actual brake system.
         brake_query = bool(re.search(
             r"тормоз|колод|диск|гальм|brake|rotor|pad|lining|drum|handbrake|parking brake",
             part_query,
             re.IGNORECASE,
         ))
+        schema_paths: dict[str, list[list[str]]] = {}
+        if len(schema_rows) > 1 or brake_query:
+            schema_paths = await self._schema_catalog_paths(
+                catalog_id, base_params, schema_rows, lang
+            )
         for schema in schema_rows:
             image_key = self._image_key(schema.get("img"))
             paths = schema_paths.get(image_key, [])
