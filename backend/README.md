@@ -1,4 +1,4 @@
-# AI Manager — v2.4.27
+# AI Manager — v2.4.28
 
 FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
@@ -84,7 +84,7 @@ A successful health check confirms only that the FastAPI process is running. A s
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
 
 
-## Tenant data attribution and public widget identity (v2.4.27)
+## Tenant data attribution and public widget identity (v2.4.28)
 
 - Every tenant receives a random public widget key; only its SHA-256 digest is stored.
 - Customer widget requests send `X-Tenant-Key`. The API resolves the tenant server-side and verifies that the HTTPS `Origin` host is in that tenant's allowed-domain list.
@@ -103,9 +103,13 @@ A successful health check confirms only that the FastAPI process is running. A s
 - Tenant staff are bound to one tenant in the database. Shop administrators can manage staff only in their own shop and cannot create another shop administrator. Managers and observers cannot manage staff or platform tenants.
 - Analytics and conversation summaries always query using the server-derived tenant scope for shop users. The super administrator's legacy overview remains scoped to the legacy `default` demo data.
 
-## OEM diagram identity safeguard (v2.4.27)
+## OEM diagram identity safeguard (v2.4.28)
 
 When a part-name search returns a selected original schema, the adapter verifies that the `parts2` diagram image is the same image. If TradeSoft returns a complete but different diagram, the adapter maps the selected schema image to a VIN-specific `groups2` leaf and accepts only a matching complete `parts2` response. If no exact match exists, the lookup fails closed instead of presenting a different diagram.
+
+## VIN group-tree fallback (v2.4.28)
+
+When the likely category root does not contain the selected schema image, the adapter searches the remaining VIN-specific group roots. Provider `hasParts` metadata is treated as advisory; a candidate is accepted only if its `parts2` response is complete and the returned image exactly matches the selected schema.
 
 ## Release limitations
 
