@@ -5,6 +5,7 @@ on:
     branches: [main, 'fix/**', 'feature/**']
   push:
     branches:
+      - main
       - "fix/**"
       - "audit/**"
       - "feature/**"
