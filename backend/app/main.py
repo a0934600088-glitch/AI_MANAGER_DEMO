@@ -222,6 +222,20 @@ async def auth_logout(credentials: HTTPAuthorizationCredentials | None = Depends
     await asyncio.to_thread(auth.revoke, token)
     return {"status": "signed_out"}
 
+@app.get("/api/admin/tenants")
+async def admin_list_tenants(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
+    tenants = await asyncio.to_thread(auth.list_tenants)
+    return {"tenants": tenants}
+
+@app.get("/api/admin/tenants/{tenant_id}/users")
+async def admin_list_tenant_users(tenant_id: int, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к сотрудникам другого магазина")
+    users = await asyncio.to_thread(auth.list_users, tenant_id)
+    return {"users": users}
+
 @app.post("/api/admin/tenants")
 async def admin_create_tenant(payload: TenantCreateRequest, user: dict = Depends(current_user)):
     auth.require_role(user, "super_admin")
