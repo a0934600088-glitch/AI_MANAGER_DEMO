@@ -108,6 +108,29 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 403)
         create_user.assert_not_called()
 
+    def test_shop_admin_cannot_list_another_tenants_staff(self):
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(main.admin_list_tenant_users(43, {"role": "shop_admin", "tenant_id": 42}))
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_manager_cannot_list_or_create_staff(self):
+        with self.assertRaises(HTTPException) as list_error:
+            asyncio.run(main.admin_list_tenant_users(42, {"role": "manager", "tenant_id": 42}))
+        self.assertEqual(list_error.exception.status_code, 403)
+        payload = main.TenantUserCreateRequest(
+            username="new-manager", display_name="New manager",
+            password="long-enough-password", role="manager",
+        )
+        with self.assertRaises(HTTPException) as create_error:
+            asyncio.run(main.admin_create_tenant_user(42, payload, {"role": "manager", "tenant_id": 42}))
+        self.assertEqual(create_error.exception.status_code, 403)
+
+    def test_shop_admin_cannot_create_platform_tenants(self):
+        payload = main.TenantCreateRequest(name="Other shop", slug="other-shop")
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(main.admin_create_tenant(payload, {"role": "shop_admin", "tenant_id": 42}))
+        self.assertEqual(error.exception.status_code, 403)
+
     def test_unknown_role_cannot_open_analytics(self):
         with self.assertRaises(HTTPException) as error:
             asyncio.run(main.admin_analytics(30, {"role": "unknown", "tenant_id": 1}))
