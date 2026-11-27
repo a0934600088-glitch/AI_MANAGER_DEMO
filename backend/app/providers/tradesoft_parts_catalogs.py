@@ -303,8 +303,10 @@ class TradesoftPartsCatalogsAdapter:
             root for root in roots
             if not category_terms or any(term in str(root.get("name") or "").lower() for term in category_terms)
         ]
-        if not selected_roots:
-            selected_roots = roots
+        # Search likely category roots first, then all remaining VIN roots if no
+        # exact image match was found. Root labels are not a reliable filter in
+        # every provider catalogue.
+        fallback_roots = [root for root in roots if root not in selected_roots]
 
         matches: list[dict[str, Any]] = []
         visited: set[str] = set()
@@ -323,9 +325,10 @@ class TradesoftPartsCatalogsAdapter:
             visited.add(key)
             visited_count += 1
 
-            has_parts = self._truthy(group.get("hasParts", group.get("has_parts")))
+            # hasParts is advisory metadata. The exact schema image plus a
+            # complete parts2 response is the authoritative identity check.
             has_subgroups = self._truthy(group.get("hasSubgroups", group.get("has_subgroups")))
-            if has_parts and self._image_key(group.get("img")) == image_key:
+            if self._image_key(group.get("img")) == image_key:
                 matches.append(group)
             if not has_subgroups:
                 return
@@ -339,6 +342,9 @@ class TradesoftPartsCatalogsAdapter:
 
         for root in selected_roots:
             await walk(root)
+        if not matches:
+            for root in fallback_roots:
+                await walk(root)
         return matches
 
     async def lookup(
