@@ -60,8 +60,8 @@ jobs:
               const result = await post({vin, mode:'parts', q:query, lang:'ru'}, query + ' schema search');
               const schemas = rows(result.schemas);
               if (!schemas.length) throw new Error(query + ': TradeSoft returned no original schemas');
-              const schema = schemas.find(item => item.groupId ?? item.group_id ?? item.groupID ?? item.id) || schemas[0];
-              const groupId = schema.groupId ?? schema.group_id ?? schema.groupID ?? schema.id;
+              const schema = schemas.find(item => item.groupId ?? item.group_id ?? item.groupID ?? item.group?.id ?? item.id) || schemas[0];
+              const groupId = schema.groupId ?? schema.group_id ?? schema.groupID ?? schema.group?.id ?? schema.id;
               if (groupId == null) throw new Error(query + ': schema has no groupId');
               const partsResult = await post({vin, mode:'parts', group_id:groupId, lang:'ru'}, query + ' parts2');
               const payload = partsResult.parts || partsResult;
@@ -69,6 +69,7 @@ jobs:
               const parts = partGroups.flatMap(group => rows(group.parts));
               const positions = rows(payload.positions);
               if (!payload.img || !positions.length || !parts.length) {
+                console.error('TradeSoft parts2 response diagnostic: ' + JSON.stringify({query, schema, groupId, keys:Object.keys(payload), img:payload.img, positions:payload.positions, partGroups:payload.partGroups}).slice(0,7000));
                 throw new Error(query + ': original diagram, callout positions or parts are missing');
               }
               const oeCount = parts.filter(part =>
