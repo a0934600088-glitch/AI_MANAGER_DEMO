@@ -34,3 +34,10 @@ The backend serves the messenger at / and API docs at /docs. Provider and admini
 - Parking-brake classification has precedence over generic drum/rear labels so drum-in-hat handbrake shoes are not merged into rear service-brake shoes.
 - The customer chooses one listed schema; only then does the backend request the corresponding VIN-specific parts2 payload and original diagram. OE numbers and callout positions remain sourced from TradeSoft.
 - Unknown or ambiguous categories are withheld rather than guessed. No CRM stock, price or fitment is fabricated.
+
+## Simple brake diagram cards (2.4.36)
+- Brake search displays at most one customer-facing card per confirmed brake category.
+- Internal TradeSoft subgroup labels and numbered schema variants are not exposed.
+- Each card shows the original VIN-specific diagram thumbnail, a plain-language title and a short explanation.
+- Clicking anywhere on the card opens the selected original diagram and its OE callout positions.
+- When TradeSoft returns several technical subgroups for one category, the UI chooses one candidate using query relevance and available part-name detail, with deterministic provider ordering as tie-breaker.
