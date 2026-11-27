@@ -99,10 +99,33 @@ test('full TradeSoft vehicle response fields are preserved for the expanded VIN 
   assert.match(html, /Тип двигателя/);
   assert.match(html, /productionYear/);
 });
-test('vehicle confirmation waits for the customer part request instead of opening the catalogue tree', () => {
+test('vehicle confirmation resumes a part request queued before VIN confirmation', () => {
   const handler = html.slice(html.indexOf('yes.onclick='), html.indexOf('const no=', html.indexOf('yes.onclick=')));
   assert.match(handler, /vehicleConfirmed=true/);
+  assert.match(handler, /const queuedPartQuery=pendingPartQuery\.trim\(\)/);
+  assert.match(handler, /if\(catalogVerified&&queuedPartQuery\)/);
+  assert.match(handler, /searchCatalogForRequest\(queuedPartQuery\)/);
   assert.doesNotMatch(handler, /lookup\('groups'/);
+});
+
+test('rejecting or replacing a VIN clears a queued request from the previous vehicle', () => {
+  const decodeStart = html.indexOf('async function decode(');
+  const decodeEnd = html.indexOf('\nfunction catalogRows', decodeStart);
+  const decode = html.slice(decodeStart, decodeEnd);
+  const rejectStart = html.indexOf('const no=');
+  const rejectEnd = html.indexOf('actions.append', rejectStart);
+  const reject = html.slice(rejectStart, rejectEnd);
+  assert.match(decode, /pendingPartQuery=''/);
+  assert.match(reject, /pendingPartQuery=''/);
+});
+
+test('brake pad axle cards use explicit front and rear customer labels', () => {
+  const start = html.indexOf('function renderCatalogSchemas(');
+  const end = html.indexOf('\n\nasync function lookup(', start);
+  const renderer = html.slice(start, end);
+  assert.match(renderer, /Передние тормозные колодки/);
+  assert.match(renderer, /Задние тормозные колодки/);
+  assert.match(renderer, /schema\.axle==='front'\|\|schema\.axle==='rear'/);
 });
 
 test('VIN card labels TradeSoft engine code and engine type separately', () => {
