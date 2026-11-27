@@ -361,7 +361,7 @@ def _vehicle_attribute_key(value: Any) -> str | None:
         "трансмісія": "transmission", "коробка передач": "transmission",
         "region": "region", "регион": "region", "регіон": "region",
         "market": "market", "рынок": "market", "ринок": "market",
-        "tecdoc": "tecdocId", "tecdocid": "tecdocId", "идентификаторtecdoc": "tecdocId",
+        "tecdoc": "tecdocId", "tecdocid": "tecdocId", "tecdocidentifier": "tecdocId", "идентификаторtecdoc": "tecdocId",
         "идентифікаторtecdoc": "tecdocId",
         "productionrange": "productionRange", "prodrange": "productionRange",
         "периодпроизводства": "productionRange",
