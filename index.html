@@ -123,7 +123,7 @@ function showVehicle(response){
  const vehicleVin=fields.VIN||vin;
  if(vehicleVin){const id=document.createElement('div');id.className='vehicle-vin';id.textContent='VIN: '+vehicleVin;el.append(id)}
  const grid=document.createElement('div');grid.className='card vehicle-grid';
- const order=['Дата производства','Год выпуска','Период производства','Рынок','Кузов','Комплектация','Код двигателя','Тип двигателя','Объём двигателя','Мощность','Мощность (hp)','Мощность (kW)','Топливо','Трансмиссия','Цвет кузова','Цвет салона'];
+ const order=['Описание автомобиля','Дата производства','Год выпуска','Период производства','Регион','Рынок','Кузов','Комплектация','Код двигателя','Тип двигателя','Объём двигателя','Мощность','Мощность (hp)','Мощность (kW)','Топливо','Трансмиссия','Цвет кузова','Цвет салона'];
  for(const k of order){if(!fields[k])continue;const row=document.createElement('div');row.className='vehicle-row';const label=document.createElement('span');label.className='vehicle-label';label.textContent=fieldLabel(k);const value=document.createElement('span');value.className='vehicle-value';value.textContent=fields[k];row.append(label,value);grid.append(row);delete fields[k]}
  for(const[k,v]of Object.entries(fields)){if(k==='VIN')continue;const row=document.createElement('div');row.className='vehicle-row';const label=document.createElement('span');label.className='vehicle-label';label.textContent=k;const value=document.createElement('span');value.className='vehicle-value';value.textContent=v;row.append(label,value);grid.append(row)}
  el.append(grid);
