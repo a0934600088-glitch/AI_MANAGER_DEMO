@@ -447,5 +447,53 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.requests), 1)
 
 
+    def test_brake_schema_categories_separate_front_rear_drum_and_parking(self):
+        classify = self.adapter._schema_brake_category
+        self.assertEqual(
+            classify({"name": "Front disc brake", "partNames": [{"name": "Brake pads"}]}),
+            ("front_brake", "Передняя тормозная система"),
+        )
+        self.assertEqual(
+            classify({"name": "Rear disc brake", "partNames": [{"name": "Brake pads"}]}),
+            ("rear_brake", "Задняя тормозная система"),
+        )
+        self.assertEqual(
+            classify({"name": "Rear drum brake shoes"}),
+            ("drum_brake", "Барабанная тормозная система"),
+        )
+        self.assertEqual(
+            classify({"name": "Parking brake shoes / handbrake"}),
+            ("parking_brake", "Колодки стояночного тормоза (ручника)"),
+        )
+
+    def test_brake_schema_classification_does_not_infer_unknown_axle_or_brake_type(self):
+        self.assertIsNone(self.adapter._schema_brake_category({"name": "Brake system"}))
+        self.assertIsNone(self.adapter._schema_brake_category({"name": "Rear suspension"}))
+        self.assertEqual(
+            self.adapter._schema_brake_category(
+                {"name": "Parking brake drum shoes", "partNames": [{"name": "Rear brake"}]}
+            )[0],
+            "parking_brake",
+        )
+
+    async def test_part_search_adds_brake_categories_from_exact_catalogue_labels(self):
+        schema_image = "//img.parts-catalogs.com/test/front-brake.png"
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
+            "list": [{
+                "groupId": "front-brake-group",
+                "img": schema_image,
+                "name": "Front disc brake",
+                "partNames": [{"name": "Brake pads"}],
+            }]
+        }
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600", mode="parts", query="тормозные колодки", lang="ru"
+            )
+        schema = result["schemas"]["list"][0]
+        self.assertEqual(schema["catalogCategory"], "front_brake")
+        self.assertEqual(schema["catalogCategoryLabel"], "Передняя тормозная система")
+
+
 if __name__ == "__main__":
     unittest.main()

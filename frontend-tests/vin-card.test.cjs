@@ -185,3 +185,23 @@ test('backend resolves axle from exact VIN catalogue group ancestry', () => {
   assert.match(backend, /schema\["axle"\]/);
   assert.match(backend, /front|rear/i);
 });
+
+test('brake searches show a classified choice list and wait for customer selection', () => {
+  const start = html.indexOf('function renderCatalogSchemas(');
+  const end = html.indexOf('\n\nasync function lookup(', start);
+  const renderer = html.slice(start, end);
+  assert.match(renderer, /front_brake:'Передняя тормозная система/);
+  assert.match(renderer, /rear_brake:'Задняя тормозная система/);
+  assert.match(renderer, /drum_brake:'Барабанная тормозная система/);
+  assert.match(renderer, /parking_brake:'Колодки стояночного тормоза/);
+  assert.match(renderer, /button\.onclick=\(\)=>lookup\('parts',query,id\)/);
+  assert.match(renderer, /const categorized=schemas\.filter\(s=>labels\[s\.catalogCategory\]&&groupOf\(s\)\)/);
+  assert.doesNotMatch(renderer.slice(renderer.indexOf('if(brakeQuery)'), renderer.indexOf('const classified=')), /lookup\('parts',query,groupOf\(schemas\[0\]\)\)/);
+});
+test('brake categories are assigned by backend from VIN catalogue labels, parking brake first', () => {
+  const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
+  assert.match(backend, /def _schema_brake_category/);
+  assert.match(backend, /parking = bool\(re\.search/);
+  assert.match(backend, /drum = bool\(re\.search/);
+  assert.match(backend, /schema\["catalogCategory"\]/);
+});
