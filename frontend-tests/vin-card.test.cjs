@@ -119,15 +119,15 @@ test('rejecting or replacing a VIN clears a queued request from the previous veh
   assert.match(reject, /pendingPartQuery=''/);
 });
 
-test('brake pad axle cards use explicit front and rear customer labels', () => {
+test('brake queries retain explicit verified front and rear system cards', () => {
   const start = html.indexOf('function renderCatalogSchemas(');
   const end = html.indexOf('\n\nasync function lookup(', start);
   const renderer = html.slice(start, end);
-  assert.match(renderer, /Передние тормозные колодки/);
-  assert.match(renderer, /Задние тормозные колодки/);
-  assert.match(renderer, /schema\.axle==='front'\|\|schema\.axle==='rear'/);
+  assert.match(renderer, /id:'front_brake',title:'Передняя тормозная система'/);
+  assert.match(renderer, /id:'rear_brake',title:'Задняя тормозная система'/);
+  assert.match(renderer, /s\.catalogCategory===category\.id/);
+  assert.doesNotMatch(renderer, /const classified=schemas\.filter\(schema=>schema\.axle/);
 });
-
 test('VIN card labels TradeSoft engine code and engine type separately', () => {
   const start = html.indexOf('function collectFields(');
   const end = html.indexOf('\\nfunction showVehicle(', start);
@@ -166,18 +166,51 @@ test('Mercedes TradeSoft description is split into separate customer card rows',
 });
 test('VIN card uses grouped responsive vehicle sections',()=>{assert.match(html,/vehicle-sections/);assert.match(html,/Идентификация/);assert.match(html,/Кузов и регион/);});
 
-test('multi-schema results render only verified front and rear axle cards', () => {
+test('non-brake multi-schema results are not forced into front/rear classification', () => {
   const start = html.indexOf('function renderCatalogSchemas(');
   const end = html.indexOf('\n\nasync function lookup(', start);
   assert.notEqual(start, -1);
   const renderer = html.slice(start, end);
-  assert.match(renderer, /schema\.axle==='front'\|\|schema\.axle==='rear'/);
-  assert.match(renderer, /Передняя часть/);
-  assert.match(renderer, /Задняя часть/);
-  assert.match(renderer, /if\(!selected\.length\|\|ambiguous\.length\)/);
-  assert.doesNotMatch(renderer, /schemas\.forEach\(/);
-  assert.match(renderer, /случайный список/);
+  assert.doesNotMatch(renderer, /const classified=schemas\.filter\(schema=>schema\.axle/);
+  assert.match(renderer, /деталей двигателя и других систем/);
+  assert.match(renderer, /schemas\.forEach\(\(schema,index\)=>/);
+  assert.match(renderer, /schema\.catalogPath/);
+  assert.match(renderer, /card\.onclick=\(\)=>lookup\('parts',query,id\)/);
+  assert.match(renderer, /Найдено несколько узлов в каталоге этого автомобиля/);
 });
+test('multilingual terminology resolves engine pistons and keeps piston rings and brake pistons distinct', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'automotive-language.js'), 'utf8');
+  const context = { window: {} };
+  vm.runInNewContext(source, context);
+  const language = context.window.AIManagerLanguage;
+  assert.ok(language.termIds('ПОРШЕНЬ').includes('engine_piston'));
+  assert.ok(language.termIds('поршня двигателя').includes('engine_piston'));
+  assert.ok(language.termIds('поршневые кольца').includes('piston_ring'));
+  assert.ok(!language.termIds('поршневые кольца').includes('engine_piston'));
+  assert.ok(language.termIds('поршень суппорта').includes('brake_caliper_piston'));
+  assert.ok(!language.termIds('поршень суппорта').includes('engine_piston'));
+  const expanded = language.expandQuery('поршень');
+  assert.match(expanded, /поршень двигателя/);
+  assert.match(expanded, /engine piston/i);
+  assert.ok(expanded.length <= 580);
+  const front = language.expandQuery('передние тормозные колодки');
+  const rear = language.expandQuery('тормозные колодки задние');
+  assert.match(front, /передний brake pads|front brake pads/i);
+  assert.match(rear, /задний brake pads|rear brake pads/i);
+});
+test('parking-brake pad phrases do not resolve to service brake pads', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'automotive-language.js'), 'utf8');
+  const context = { window: {} };
+  vm.runInNewContext(source, context);
+  const ids = context.window.AIManagerLanguage.termIds('колодки ручника');
+  assert.ok(ids.includes('parking_brake_shoe'));
+  assert.ok(!ids.includes('brake_pad'));
+});
+test('backend axle metadata is only assigned for brake searches', () => {
+  const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
+  assert.match(backend, /if brake_query:[\s\S]{0,300}axle = self\._schema_axle/);
+});
+
 test('backend resolves axle from exact VIN catalogue group ancestry', () => {
   const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
   assert.match(backend, /async def _schema_catalog_paths/);

@@ -136,6 +136,29 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
 
 
+    async def test_not_found_synonym_does_not_abort_remaining_part_queries(self):
+        def suggestions(params):
+            if params.get("q") == "No match":
+                raise provider.TradesoftError("not_found", "No matching suggestion")
+            return [{"sid": "87", "name": "Brake pads"}]
+
+        def schemas(params):
+            if params.get("partName") == "No match":
+                raise provider.TradesoftError("not_found", "No matching schema")
+            return {"list": [{"groupId": 44, "name": "Front brake pads"}]}
+
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups-suggest"] = suggestions
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = schemas
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600", mode="parts",
+                query="No match | Brake pads", lang="en"
+            )
+
+        self.assertEqual(result["schemas"]["list"][0]["groupId"], 44)
+        searched = [r["params"].get("q") for r in self.requests if r["url"].endswith("/groups-suggest")]
+        self.assertEqual(searched, ["No match", "Brake pads"])
+
     async def test_part_name_search_uses_suggest_then_schemas_with_sid(self):
         with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
             result = await self.adapter.lookup(

@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO — AI Manager 2.4.35
+# AI_MANAGER_DEMO — AI Manager 2.4.37
 
 Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration. The separate `admin.html` page provides a protected administrator analytics console.
 
@@ -41,3 +41,13 @@ The backend serves the messenger at / and API docs at /docs. Provider and admini
 - Each card shows the original VIN-specific diagram thumbnail, a plain-language title and a short explanation.
 - Clicking anywhere on the card opens the selected original diagram and its OE callout positions.
 - When TradeSoft returns several technical subgroups for one category, the UI chooses one candidate using query relevance and available part-name detail, with deterministic provider ordering as tie-breaker.
+
+
+## Universal part-name search (2.4.37)
+- Customer part names are normalized and expanded through a multilingual automotive terminology glossary (Russian, Ukrainian and English), including colloquial names, word-order variants and common spelling forms.
+- Search alternatives are sent independently to TradeSoft `groups-suggest` and `schemas`; the original customer wording is retained as the first query.
+- Engine, transmission, suspension, steering and other non-brake diagrams are never forced into front/rear brake classification.
+- When TradeSoft returns multiple VIN-specific non-brake diagrams, the customer sees the provider-confirmed node labels, catalogue paths and original thumbnails and chooses the relevant diagram. No arbitrary first-result selection is made.
+- Brake-only front/rear/drum/parking classification remains isolated to brake searches.
+- The terminology engine distinguishes engine pistons, piston rings, brake-caliper pistons and parking-brake shoes; it does not treat these as interchangeable parts.
+- Expanded query length is bounded and the backend trace records the bounded part query for troubleshooting. Compatibility, OE numbers, stock and prices continue to come only from authoritative catalogue/CRM sources.

@@ -10,7 +10,7 @@
     {id:'ball_joint',ru:['шаровая','шаровая опора'],uk:['кульова','кульова опора'],en:['ball joint']},
     {id:'wheel_bearing',ru:['ступичный подшипник','подшипник ступицы'],uk:['підшипник маточини','ступичний підшипник'],en:['wheel bearing','hub bearing']},
     {id:'brake_caliper',ru:['суппорт','тормозной суппорт'],uk:['супорт','гальмівний супорт'],en:['brake caliper']},
-    {id:'brake_pad',ru:['тормозные колодки','колодки тормозные','тормозная колодка','передние тормозные колодки'],uk:['гальмівні колодки','гальмівна колодка','передні гальмівні колодки'],en:['brake pads','brake pad','front brake pads']},
+    {id:'brake_pad',ru:['тормозные колодки','колодки тормозные','тормозная колодка','передние тормозные колодки','задние тормозные колодки','тормозные колодки передние','тормозные колодки задние','колодки'],uk:['гальмівні колодки','гальмівна колодка','передні гальмівні колодки','задні гальмівні колодки','гальмівні колодки передні','гальмівні колодки задні'],en:['brake pads','brake pad','front brake pads','rear brake pads','brake pads front','brake pads rear']},
     {id:'brake_disc',ru:['тормозной диск','диск тормозной','тормозные диски','диски тормозные'],uk:['гальмівний диск','гальмівні диски'],en:['brake disc','brake rotor','brake discs','brake rotors']},
     {id:'cv_joint_outer',ru:['наружный шрус','наружная граната','граната наружная'],uk:['зовнішній шрус','зовнішній шарнір'],en:['outer cv joint','outer cv axle joint']},
     {id:'cv_joint_inner',ru:['внутренний шрус','внутренняя граната'],uk:['внутрішній шрус','внутрішній шарнір'],en:['inner cv joint']},
@@ -33,23 +33,73 @@
     {id:'thermostat',ru:['термостат'],uk:['термостат'],en:['thermostat']},
     {id:'radiator',ru:['радиатор охлаждения','радиатор двигателя'],uk:['радіатор охолодження','радіатор двигуна'],en:['engine radiator','radiator']},
     {id:'cabin_filter',ru:['салонный фильтр','фильтр салона'],uk:['салонний фільтр','фільтр салону'],en:['cabin filter','pollen filter']},
-    {id:'oem_number',ru:['оригинальный номер','номер оригинала','оэ номер','oe номер'],uk:['оригінальний номер','номер оригіналу','oe номер'],en:['oe number','oem number','genuine part number']}
+    {id:'oem_number',ru:['оригинальный номер','номер оригинала','оэ номер','oe номер'],uk:['оригінальний номер','номер оригіналу','oe номер'],en:['oe number','oem number','genuine part number']},
+    {id:'engine_piston',ru:['поршень двигателя','поршень мотора','поршень двс','поршень цилиндра','поршень','поршни двигателя','поршни','поршневая группа','поршень в сборе','поршня двигателя'],uk:['поршень двигуна','поршень мотора','поршень циліндра','поршень','поршні двигуна','поршні','поршнева група'],en:['engine piston','piston','piston assembly','cylinder piston','engine pistons']},
+    {id:'piston_ring',ru:['поршневые кольца','кольца поршневые','кольца двигателя','кольца на поршень'],uk:['поршневі кільця','кільця поршневі','кільця двигуна'],en:['piston rings','engine piston rings','piston ring set']},
+    {id:'connecting_rod',ru:['шатун двигателя','шатун','шатуны','шатунный механизм'],uk:['шатун двигуна','шатун','шатуни'],en:['connecting rod','con rod','engine connecting rod']},
+    {id:'crankshaft',ru:['коленвал','коленчатый вал','вал коленчатый'],uk:['колінвал','колінчастий вал'],en:['crankshaft','crank shaft']},
+    {id:'cylinder_block',ru:['блок цилиндров','блок двигателя','блок цилиндра','гбц блок'],uk:['блок циліндрів','блок двигуна'],en:['cylinder block','engine block','cylinder case']},
+    {id:'cylinder_head',ru:['головка блока цилиндров','головка блока','головка двигателя','гбц'],uk:['головка блока циліндрів','головка блока','гбц'],en:['cylinder head','engine head','head assembly']},
+    {id:'engine_valve',ru:['клапан двигателя','клапан впускной','клапан выпускной','впускной клапан','выпускной клапан','клапана двигателя'],uk:['клапан двигуна','впускний клапан','випускний клапан','клапани двигуна'],en:['engine valve','intake valve','exhaust valve','inlet valve']},
+    {id:'camshaft',ru:['распредвал','распределительный вал','вал распределительный'],uk:['розпредвал','розподільний вал'],en:['camshaft','cam shaft']},
+    {id:'timing_chain',ru:['цепь грм','цепь газораспределения','цепь двигателя','комплект цепи грм'],uk:['ланцюг грм','ланцюг газорозподілу','ланцюг двигуна'],en:['timing chain','engine timing chain','timing chain kit']},
+    {id:'oil_pump',ru:['масляный насос','насос масла','маслонасос'],uk:['масляний насос','насос оливи'],en:['oil pump','engine oil pump']},
+    {id:'turbocharger',ru:['турбина','турбокомпрессор','турбонагнетатель'],uk:['турбіна','турбокомпресор'],en:['turbocharger','turbo','turbo unit']},
+    {id:'fuel_injector',ru:['форсунка','топливная форсунка','дизельная форсунка','инжектор'],uk:['форсунка','паливна форсунка','дизельна форсунка'],en:['fuel injector','injector','diesel injector']},
+    {id:'spark_plug',ru:['свеча зажигания','свечи зажигания','свеча','свечи'],uk:['свічка запалювання','свічки запалювання'],en:['spark plug','spark plugs','ignition plug']},
+    {id:'glow_plug',ru:['свеча накала','свечи накала','свеча накаливания'],uk:['свічка розжарювання','свічки розжарювання'],en:['glow plug','glow plugs']},
+    {id:'ignition_coil',ru:['катушка зажигания','катушка','катушки зажигания'],uk:['котушка запалювання','котушки запалювання'],en:['ignition coil','coil pack','ignition coils']},
+    {id:'brake_shoe',ru:['тормозные барабанные колодки','барабанные колодки','тормозная колодка барабана'],uk:['барабанні гальмівні колодки','гальмівні колодки барабана'],en:['brake shoes','drum brake shoes','brake shoe']},
+    {id:'parking_brake_shoe',ru:['колодки ручника','колодка ручника','колодки стояночного тормоза','колодка стояночного тормоза','колодки ручного тормоза'],uk:['колодки ручника','колодки стоянкового гальма','колодка стоянкового гальма'],en:['parking brake shoes','handbrake shoes','parking brake shoe']},
+    {id:'brake_caliper_piston',ru:['поршень суппорта','поршень тормозного суппорта','поршень тормоза'],uk:['поршень супорта','поршень гальмівного супорта'],en:['brake caliper piston','caliper piston']},
+    {id:'brake_master_cylinder',ru:['главный тормозной цилиндр','гтц','тормозной цилиндр главный'],uk:['головний гальмівний циліндр','гтц'],en:['brake master cylinder','master cylinder']},
+    {id:'wheel_cylinder',ru:['тормозной цилиндр колеса','рабочий тормозной цилиндр','колесный цилиндр'],uk:['робочий гальмівний циліндр','колісний циліндр'],en:['wheel cylinder','brake wheel cylinder']},
+    {id:'stabilizer_link',ru:['стойка стабилизатора','тяга стабилизатора','линк стабилизатора'],uk:['стійка стабілізатора','тяга стабілізатора'],en:['stabilizer link','sway bar link','anti-roll bar link']},
+    {id:'stabilizer_bushing',ru:['втулка стабилизатора','резинка стабилизатора','втулки стабилизатора'],uk:['втулка стабілізатора','гумка стабілізатора'],en:['stabilizer bushing','sway bar bushing','anti-roll bar bush']},
+    {id:'steering_rack',ru:['рулевая рейка','рейка рулевая','рулевой механизм'],uk:['кермова рейка','рейка кермова'],en:['steering rack','steering gear rack']},
+    {id:'wheel_hub',ru:['ступица колеса','ступица','ступичный узел'],uk:['маточина колеса','маточина'],en:['wheel hub','hub assembly']},
+    {id:'coil_spring',ru:['пружина подвески','пружина амортизатора','пружина'],uk:['пружина підвіски','пружина амортизатора'],en:['coil spring','suspension spring']},
+    {id:'engine_belt',ru:['ремень двигателя','приводной ремень','ремень генератора','поликлиновый ремень'],uk:['ремінь двигуна','привідний ремінь','ремінь генератора'],en:['serpentine belt','drive belt','accessory belt','engine belt']},
+    {id:'exhaust_manifold',ru:['выпускной коллектор','коллектор выпуска'],uk:['випускний колектор'],en:['exhaust manifold']},
+    {id:'intake_manifold',ru:['впускной коллектор','коллектор впуска'],uk:['впускний колектор'],en:['intake manifold','inlet manifold']},
+    {id:'oxygen_sensor',ru:['лямбда зонд','датчик кислорода','кислородный датчик'],uk:['лямбда зонд','датчик кисню'],en:['oxygen sensor','lambda sensor','o2 sensor']}
   ];
   const norm=s=>String(s||'').toLocaleLowerCase().replace(/[ё]/g,'е').replace(/[’']/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   const index=[];
   rows.forEach(row=>['ru','uk','en'].forEach(lang=>(row[lang]||[]).forEach(alias=>index.push({id:row.id,lang,alias,norm:norm(alias)}))));
   function matchTerms(text){
     const source=norm(text), found=new Map();
+    const parkingContext=/(ручник|стояночн|стоянков|handbrake|parking brake)/i.test(source);
+    const brakeContext=/(тормоз|гальм|brake|суппорт|супорт)/i.test(source);
     for(const item of index){
+      if(item.id==='engine_piston'&&brakeContext)continue;
+      if(item.id==='brake_pad'&&parkingContext)continue;
       if((' '+source+' ').includes(' '+item.norm+' ')&&!found.has(item.id))found.set(item.id,rows.find(r=>r.id===item.id));
     }
     return [...found.values()];
   }
   function expandQuery(text){
-    const found=matchTerms(text), aliases=[];
-    found.forEach(row=>['ru','uk','en'].forEach(lang=>(row[lang]||[]).slice(0,2).forEach(a=>{if(norm(a)!==norm(text))aliases.push(a)})));
-    return [String(text||'').trim(),...aliases].filter(Boolean).join(' | ');
+    const original=String(text||'').trim();
+    if(!original)return '';
+    const found=matchTerms(original), aliases=[];
+    const source=norm(original);
+    const pluralPart=/(колодк|диск|амортизатор|стойк|сайлентблок|рычаг|подшипник|свеч|форсунк|гальмівн)/i.test(source);
+    const axle=/(задн|rear|back)/i.test(source)?{ru:pluralPart?'задние':'задний',uk:pluralPart?'задні':'задній',en:'rear'}:
+      (/(передн|front)/i.test(source)?{ru:pluralPart?'передние':'передний',uk:pluralPart?'передні':'передній',en:'front'}:null);
+    const brakeContext=/(тормоз|гальм|brake|суппорт|супорт)/i.test(source);
+    found.forEach(row=>{
+      if(row.id==='engine_piston'&&brakeContext)return;
+      ['ru','uk','en'].forEach(lang=>(row[lang]||[]).slice(0,2).forEach(alias=>{
+        if(norm(alias)===source)return;
+        const variant=axle&&!/(передн|задн|front|rear|back)/i.test(alias)?axle[lang]+' '+alias:alias;
+        if(!aliases.some(item=>norm(item)===norm(variant)))aliases.push(variant);
+      }));
+    });
+    const compact=[original,...aliases].filter(Boolean).slice(0,7);
+    let output=compact.join(' | ');
+    while(output.length>580&&compact.length>2){compact.pop();output=compact.join(' | ')}
+    return output;
   }
   function termIds(text){return matchTerms(text).map(x=>x.id)}
-  global.AIManagerLanguage=Object.freeze({version:'1.0.0',matchTerms,expandQuery,termIds,glossary:rows});
+  global.AIManagerLanguage=Object.freeze({version:'1.1.0',matchTerms,expandQuery,termIds,glossary:rows});
 })(window);

@@ -241,9 +241,15 @@ class TradesoftPartsCatalogsAdapter:
         schemas_by_id: dict[str, dict[str, Any]] = {}
         first_payload: Any = None
         for term in terms:
-            suggestions_payload = await self._get(
-                f"/catalogs/{catalog_id}/groups-suggest", {"q": term}, lang
-            )
+            try:
+                suggestions_payload = await self._get(
+                    f"/catalogs/{catalog_id}/groups-suggest", {"q": term}, lang
+                )
+            except TradesoftError as exc:
+                if exc.code != "not_found":
+                    raise
+                # One unsupported synonym must not abort other valid search terms.
+                suggestions_payload = []
             term_ids: list[str] = []
             for suggestion in self._rows(suggestions_payload):
                 sid = suggestion.get("sid", suggestion.get("id"))
@@ -259,9 +265,16 @@ class TradesoftPartsCatalogsAdapter:
             schema_params: dict[str, Any] = {"carId": car_id, "partName": term}
             if term_ids:
                 schema_params["partNameIds"] = ",".join(dict.fromkeys(term_ids))
-            schema_payload = await self._get(
-                f"/catalogs/{catalog_id}/schemas", schema_params, lang
-            )
+            try:
+                schema_payload = await self._get(
+                    f"/catalogs/{catalog_id}/schemas", schema_params, lang
+                )
+            except TradesoftError as exc:
+                if exc.code != "not_found":
+                    raise
+                # Continue with the remaining terminology variants when a single
+                # provider query has no matching schema.
+                continue
             if first_payload is None:
                 first_payload = schema_payload
             for schema in self._rows(schema_payload):
@@ -727,10 +740,13 @@ class TradesoftPartsCatalogsAdapter:
             paths = schema_paths.get(image_key, [])
             if paths:
                 schema["catalogPath"] = paths[0] if len(paths) == 1 else paths
-            axle = self._schema_axle(schema, paths)
-            if axle:
-                schema["axle"] = axle
+            # Axle labels are meaningful for brake-system selection only.
+            # A path containing "front"/"rear" must never classify an engine,
+            # transmission or other component as a front/rear brake candidate.
             if brake_query:
+                axle = self._schema_axle(schema, paths)
+                if axle:
+                    schema["axle"] = axle
                 brake_category = self._schema_brake_category(schema, paths)
                 if brake_category:
                     schema["catalogCategory"], schema["catalogCategoryLabel"] = brake_category
