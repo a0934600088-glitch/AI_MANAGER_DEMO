@@ -16,12 +16,14 @@ Base URL: `https://api.parts-catalogs.com/v1`
 Authentication: raw API key in the `Authorization` header (no `Bearer` prefix).
 
 Documented flow:
-1. `GET /car/info?q={VIN}` returns vehicle candidates with `catalogId`, `carId` and `criteria`.
-2. `GET /catalogs/{catalogId}/groups2/` navigates vehicle-specific catalogue groups.
-3. `GET /catalogs/{catalogId}/schemas` returns vehicle schemas and can be filtered by `partName`.
-4. `GET /catalogs/{catalogId}/parts2` retrieves OE parts, diagram image and callout positions for a selected `groupId`.
+1. `GET /car/info?q={VIN}` returns vehicle candidates with `catalogId`, `carId`, `criteria` and any parameters included in CarInfo.
+2. For one unambiguous match, `GET /catalogs/{catalogId}/cars2/{carId}?criteria={criteria}` retrieves the detailed selected vehicle record and its parameter collection.
+3. The backend preserves both raw responses and normalizes named parameter/value rows into the stable `vehicle_attributes` contract used by the customer card.
+4. `GET /catalogs/{catalogId}/groups2/` navigates vehicle-specific catalogue groups.
+5. `GET /catalogs/{catalogId}/schemas` returns vehicle schemas and can be filtered by `partName`.
+6. `GET /catalogs/{catalogId}/parts2` retrieves OE parts, diagram image and callout positions for a selected `groupId`.
 
-The backend preserves the provider's `catalogId`, `carId` and `criteria` values. It caches a VIN decode in process memory for 24 hours to avoid repeating the initial VIN lookup during the same running process.
+The backend preserves the provider's `catalogId`, `carId` and `criteria` values. If the detailed Car2 request is unavailable, the base VIN identity remains available and the response marks `vehicle_details_status=unavailable`; no missing characteristics are fabricated. The enriched VIN result is cached in process memory for 24 hours.
 
 ## API routes
 
