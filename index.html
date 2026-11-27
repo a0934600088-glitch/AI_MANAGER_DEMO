@@ -283,6 +283,36 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
    if(!key||seen.has(key))return false;seen.add(key);return true;
   });
  };
+ const brakeQuery=/тормоз|колод|гальм|brake|pad|lining|drum|handbrake|parking/i.test(String(query||''));
+ if(brakeQuery){
+  const labels={
+   front_brake:'Передняя тормозная система — дисковые тормоза и колодки',
+   rear_brake:'Задняя тормозная система — дисковые тормоза и колодки',
+   drum_brake:'Барабанная тормозная система — механизм и колодки',
+   parking_brake:'Колодки стояночного тормоза (ручника)'
+  };
+  const order=['front_brake','rear_brake','drum_brake','parking_brake'];
+  const categorized=schemas.filter(s=>labels[s.catalogCategory]&&groupOf(s));
+  const el=document.createElement('div');el.className='msg';
+  const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Выберите тормозной узел';el.append(heading);
+  if(!categorized.length){
+   add('TradeSoft вернул схемы, но по их названиям и иерархии каталога нельзя надёжно определить тип тормозного узла. Варианты не будут придуманы. Уточните переднюю/заднюю ось или передайте запрос менеджеру.','bot','system');return;
+  }
+  order.forEach(category=>{
+   const rows=uniqueByDiagram(categorized.filter(s=>s.catalogCategory===category));
+   if(!rows.length)return;
+   const section=document.createElement('div');section.className='vehicle-row';
+   const title=document.createElement('div');title.style.fontWeight='700';title.textContent=labels[category];section.append(title);
+   rows.forEach((schema,index)=>{
+    const id=groupOf(schema);const name=catalogValue(schema,['name','title','description'])||labels[category];
+    const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='width:100%;text-align:left;margin-top:7px';
+    button.textContent=rows.length>1?(name+' — схема '+(index+1)):'Открыть оригинальную схему';
+    button.onclick=()=>lookup('parts',query,id);section.append(button);
+   });
+   el.append(section);
+  });
+  $('messages').append(el);scrollEnd();return;
+ }
  const classified=schemas.filter(schema=>schema.axle==='front'||schema.axle==='rear');
  if(classified.length){
   const byAxle={front:uniqueByDiagram(classified.filter(s=>s.axle==='front')),rear:uniqueByDiagram(classified.filter(s=>s.axle==='rear'))};
@@ -307,9 +337,7 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
   const el=document.createElement('div');el.className='msg';
   const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Подходящие схемы по передней и задней части';el.append(heading);
   selected.forEach(schema=>{
-   const axle=schema.axle;
-   const id=groupOf(schema);
-   const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
+   const axle=schema.axle;const id=groupOf(schema);const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
    const item=document.createElement('div');item.className='vehicle-row';
    if(image){const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=(brakePads?(axle==='front'?'Передние тормозные колодки':'Задние тормозные колодки'):(axle==='front'?'Передняя часть — ':'Задняя часть — ')+component);img.style.cssText='display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:7px;margin:6px 0';item.append(img)}
    const label=document.createElement('div');label.style.fontWeight='700';label.textContent=brakePads?(axle==='front'?'Передние тормозные колодки':'Задние тормозные колодки'):(axle==='front'?'Передняя часть':'Задняя часть')+(component?' — '+component:'');item.append(label);
