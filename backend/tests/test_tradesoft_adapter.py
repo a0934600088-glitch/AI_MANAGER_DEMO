@@ -341,6 +341,43 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["resolvedGroupId"], "valid-leaf")
         self.assertEqual(result["parts"]["img"], schema_image)
 
+    async def test_schema_mapping_failure_includes_bounded_candidate_diagnostics(self):
+        schema_image = "//img.parts-catalogs.com/test/brake.png"
+        wrong_image = "//img.parts-catalogs.com/test/wrong.png"
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
+            "list": [{
+                "groupId": "opaque-schema-id",
+                "img": schema_image,
+                "name": "Front brake diagram",
+                "partNames": [{"id": "289", "name": "Brake pads"}],
+            }]
+        }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups2/"] = lambda params: (
+            {"items": [{"groupId": "brake-root", "name": "Brake system", "hasSubgroups": True}]}
+            if "groupId" not in params else
+            {"items": [{"groupId": "leaf-id", "name": "Front brake pads", "hasSubgroups": False, "img": schema_image}]}
+        )
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/parts2"] = lambda params: {
+            "img": wrong_image,
+            "partGroups": [{"parts": [{"oeNumber": "WRONG-IMAGE"}]}],
+            "positions": [{"number": "9", "x": 0.4, "y": 0.4}],
+        }
+
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            with self.assertRaises(provider.TradesoftError) as error:
+                await self.adapter.lookup(
+                    "WVWZZZAUZJP594600",
+                    mode="parts",
+                    query="тормозные колодки",
+                    lang="ru",
+                    group_id="opaque-schema-id",
+                )
+
+        self.assertEqual(error.exception.code, "schema_group_mapping_failed")
+        self.assertIn("groupIdLength", error.exception.message)
+        self.assertIn("sameImage", error.exception.message)
+        self.assertIn("payloadKeys", error.exception.message)
+
     async def test_multi_schema_search_classifies_front_and_rear_from_vin_catalogue_path(self):
         front_image = "//img.parts-catalogs.com/test/front-brake.png"
         rear_image = "//img.parts-catalogs.com/test/rear-brake.png"
