@@ -112,6 +112,7 @@ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();const u=$(
 document.querySelectorAll('#nav button').forEach(b=>{b.hidden=(hiddenByRole[role]||hiddenByRole.observer).includes(b.dataset.view)});
 $('tenantNav').hidden=!['super_admin','shop_admin'].includes(role);
 $('tenantCreatePanel').classList.toggle('hidden',role!=='super_admin');
+const shopAdminRoleOption=$('staffRole').querySelector('option[value="shop_admin"]');if(shopAdminRoleOption)shopAdminRoleOption.hidden=role!=='super_admin';if(role!=='super_admin'&&$('staffRole').value==='shop_admin')$('staffRole').value='manager';
 if(role==='super_admin')$('sidebar').querySelector('.side-brand small').textContent='Панель администратора AI Manager';
 else if(role==='shop_admin')$('sidebar').querySelector('.side-brand small').textContent='Администратор магазина · '+(currentUser.display_name||currentUser.username);
 else if(role==='observer')$('sidebar').querySelector('.side-brand small').textContent='Наблюдатель · '+(currentUser.display_name||currentUser.username);
