@@ -142,3 +142,23 @@ test('Mercedes TradeSoft description is split into separate customer card rows',
   assert.equal(fields['Регион'],'Europe, North America, Japan');assert.equal(fields['Тип кузова'],'C COUPE');assert.equal(fields['Трансмиссия'],'7-SPEED AUTOMATIC TRANSMISSION');assert.equal(fields['Код КПП'],'722.969');assert.equal(fields['Тип топлива'],'Бензин');assert.equal(fields['Цилиндры'],'4');assert.ok(fields['Код двигателя'].includes('M274 E20'));
 });
 test('VIN card uses grouped responsive vehicle sections',()=>{assert.match(html,/vehicle-sections/);assert.match(html,/Идентификация/);assert.match(html,/Кузов и регион/);});
+
+test('multi-schema results render only verified front and rear axle cards', () => {
+  const start = html.indexOf('function renderCatalogSchemas(');
+  const end = html.indexOf('\n\nasync function lookup(', start);
+  assert.notEqual(start, -1);
+  const renderer = html.slice(start, end);
+  assert.match(renderer, /schema\.axle==='front'\|\|schema\.axle==='rear'/);
+  assert.match(renderer, /Передняя часть/);
+  assert.match(renderer, /Задняя часть/);
+  assert.match(renderer, /if\(!selected\.length\|\|ambiguous\.length\)/);
+  assert.doesNotMatch(renderer, /schemas\.forEach\(/);
+  assert.match(renderer, /случайный список/);
+});
+test('backend resolves axle from exact VIN catalogue group ancestry', () => {
+  const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
+  assert.match(backend, /async def _schema_catalog_paths/);
+  assert.match(backend, /schema\["catalogPath"\]/);
+  assert.match(backend, /schema\["axle"\]/);
+  assert.match(backend, /front|rear/i);
+});

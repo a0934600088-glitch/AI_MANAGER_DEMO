@@ -278,6 +278,83 @@ class TradesoftPartsCatalogsAdapter:
             envelope = {"list": rows}
         return list(suggestions_by_id.values()), envelope, rows
 
+    @staticmethod
+    def _schema_axle(schema: dict[str, Any], paths: list[list[str]] | None = None) -> str | None:
+        """Return an axle only when the provider's own labels identify it."""
+        names: list[str] = []
+        for key in ("name", "title", "description", "partName", "part_name", "text"):
+            value = schema.get(key)
+            if value not in (None, ""):
+                names.append(str(value))
+        for item in schema.get("partNames", []) if isinstance(schema.get("partNames"), list) else []:
+            if isinstance(item, dict):
+                value = item.get("name") or item.get("title")
+                if value:
+                    names.append(str(value))
+        for path in paths or []:
+            names.extend(str(part) for part in path if part)
+        label = " ".join(names).lower()
+        front = bool(re.search(r"\bfront\b|front[- ]?(?:axle|wheel|brake)|передн", label))
+        rear = bool(re.search(r"\brear\b|\bback\b|rear[- ]?(?:axle|wheel|brake)|задн", label))
+        if front == rear:
+            return None
+        return "front" if front else "rear"
+
+    async def _schema_catalog_paths(
+        self,
+        catalog_id: Any,
+        base_params: dict[str, Any],
+        schemas: list[dict[str, Any]],
+        lang: str,
+    ) -> dict[str, list[list[str]]]:
+        """Map returned schema images to their VIN-specific groups2 ancestry."""
+        wanted = {
+            self._image_key(schema.get("img"))
+            for schema in schemas
+            if self._image_key(schema.get("img"))
+        }
+        if not wanted:
+            return {}
+        roots_payload = await self._get(
+            f"/catalogs/{catalog_id}/groups2/", dict(base_params), lang
+        )
+        roots = self._rows(roots_payload)
+        matches: dict[str, list[list[str]]] = {}
+        visited: set[str] = set()
+        visited_count = 0
+
+        async def walk(group: dict[str, Any], parent_path: list[str], depth: int = 0) -> None:
+            nonlocal visited_count
+            if depth > 8 or visited_count >= 500:
+                return
+            group_id = self._schema_group_id(group)
+            if group_id is None:
+                return
+            key = str(group_id)
+            if key in visited:
+                return
+            visited.add(key)
+            visited_count += 1
+            name = str(group.get("name") or group.get("title") or group.get("description") or "").strip()
+            path = parent_path + ([name] if name else [])
+            image_key = self._image_key(group.get("img"))
+            if image_key in wanted:
+                matches.setdefault(image_key, []).append(path)
+            subgroup_hint = group.get("hasSubgroups", group.get("has_subgroups"))
+            if subgroup_hint is not None and not self._truthy(subgroup_hint):
+                return
+            child_params = dict(base_params)
+            child_params["groupId"] = group_id
+            children_payload = await self._get(
+                f"/catalogs/{catalog_id}/groups2/", child_params, lang
+            )
+            for child in self._rows(children_payload):
+                await walk(child, path, depth + 1)
+
+        for root in roots:
+            await walk(root, [])
+        return matches
+
     async def _groups_matching_schema_image(
         self,
         catalog_id: Any,
@@ -483,6 +560,21 @@ class TradesoftPartsCatalogsAdapter:
         suggestions, schemas, schema_rows = await self._search_schemas(
             catalog_id, car_id, part_query, lang
         )
+        # A multi-result search must be reduced using the VIN-specific catalogue
+        # hierarchy, not by guessing from generic labels such as "Disc brake 3".
+        schema_paths: dict[str, list[list[str]]] = {}
+        if len(schema_rows) > 1:
+            schema_paths = await self._schema_catalog_paths(
+                catalog_id, base_params, schema_rows, lang
+            )
+        for schema in schema_rows:
+            image_key = self._image_key(schema.get("img"))
+            paths = schema_paths.get(image_key, [])
+            if paths:
+                schema["catalogPath"] = paths[0] if len(paths) == 1 else paths
+            axle = self._schema_axle(schema, paths)
+            if axle:
+                schema["axle"] = axle
         return {
             "vehicle": car,
             "catalogId": catalog_id,
