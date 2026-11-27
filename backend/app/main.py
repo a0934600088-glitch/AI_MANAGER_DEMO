@@ -405,7 +405,8 @@ def _description_vehicle_attributes(description: Any) -> dict[str, str]:
     trans = re.search(r"(\d+[- ]SPEED\s+(?:AUTOMATIC|MANUAL)\s+TRANSMISSION)\s+([A-Z0-9-]+)", text, re.I)
     if trans:
         put("transmission", trans.group(1)); put("gearboxModel", trans.group(2))
-        codes = re.findall(r"\b\d{3}\.\d{3}\b", trans.group(0))
+        gearbox_tail = re.search(r"\(([^)]*)\)", text[trans.end():])
+        codes = re.findall(r"\b\d{3}\.\d{3}\b", gearbox_tail.group(1)) if gearbox_tail else []
         if codes: put("gearboxCode", codes[-1])
     engine = re.search(r"\b(R\d+)\s+(GASOLINE|PETROL|DIESEL)\s+ENGINE\s+([A-Z0-9. ]+?)(?=\s*\(|,|$)", text, re.I)
     if engine:
