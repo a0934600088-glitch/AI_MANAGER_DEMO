@@ -19,6 +19,8 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /ai_conversation_id/);
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
+  assert.match(chat, /X-Tenant-Key/);
+  assert.ok(chat.includes('window.AI_MANAGER_TENANT_KEY'));
   assert.match(chat, /trackEvent\('vehicle_confirmed'/);
   assert.match(chat, /catalogVerified=!!d\?\.is_oem_catalog_verified/);
   assert.match(chat, /if\(!catalogVerified\)/);
@@ -53,4 +55,25 @@ test('unavailable sales and AI metrics are explicitly marked rather than fabrica
   assert.match(admin, /Учёт токенов и расходов AI не подключён/);
   assert.match(analytics, /offer_created/);
   assert.match(analytics, /order_created/);
+});
+
+test('admin and shop users use distinct role-checked login choices', () => {
+  assert.match(admin, /id="accessMode"/);
+  assert.match(admin, /data-access="admin"/);
+  assert.match(admin, /Администратор/);
+  assert.match(admin, /data-access="manager"/);
+  assert.match(admin, /Интернет-магазин/);
+  assert.match(admin, /login-choice active/);
+  assert.match(admin, /currentUser\.role==='super_admin'\?'admin':'manager'/);
+  assert.match(admin, /shop_admin:\[\]/);
+  assert.match(admin, /observer:\['vehicles','parts','crm','sales','ai','integrations','tenants'\]/);
+  assert.match(admin, /Authorization:'Bearer '\+auth/);
+  assert.match(admin, /Эта учётная запись не имеет доступа к выбранному кабинету/);
+  assert.ok(admin.includes("api/auth/login"));
+  assert.ok(admin.includes("api/auth/logout"));
+  assert.doesNotMatch(admin, /auth='Basic '/);
+  assert.match(backend, /tenant_id = "default" if user\["role"\] == "super_admin" else str\(user\["tenant_id"\]\)/);
+  assert.match(backend, /Администратор магазина не может создавать других администраторов магазина/);
+  assert.match(analytics, /def dashboard_summary\(days: int = 30, tenant_id: str = "default"\)/);
+  assert.match(analytics, /def conversation_summary\(days: int = 30, tenant_id: str = "default"\)/);
 });

@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
+from app import auth
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as version_file:
@@ -27,6 +28,7 @@ ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "").strip()
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 admin_auth = HTTPBasic(auto_error=False)
+bearer_auth = HTTPBearer(auto_error=False)
 TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
 app = FastAPI(
     title="AI Manager Catalog API",
@@ -52,9 +54,33 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "Authorization", "X-Conversation-ID"],
+    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "Authorization", "X-Conversation-ID", "X-Tenant-Key"],
+    allow_origin_regex=r"https://[A-Za-z0-9.-]+" if os.getenv("TENANT_CORS_ENABLED", "false").lower() == "true" else None,
 )
 
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
+
+class TenantCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    slug: str = Field(min_length=2, max_length=80, pattern="^[a-z0-9][a-z0-9-]*$")
+    domains: list[str] = Field(min_length=1, max_length=10)
+
+
+class TenantPublicConfigRequest(BaseModel):
+    domains: list[str] = Field(min_length=1, max_length=10)
+
+class TenantUserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=120)
+    display_name: str = Field(default="", max_length=160)
+    password: str = Field(min_length=12, max_length=256)
+    role: Literal["shop_admin", "manager", "observer"] = "manager"
+
+async def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth)):
+    token = credentials.credentials if credentials else None
+    return await asyncio.to_thread(auth.authenticate, token)
 
 class DecodeRequest(BaseModel):
     vin: str = Field(min_length=5, max_length=40)
@@ -90,6 +116,15 @@ from app import analytics
 @app.middleware("http")
 async def analytics_request_middleware(request, call_next):
     started = asyncio.get_running_loop().time()
+    request.state.tenant_id = "default"
+    tenant_key = request.headers.get("X-Tenant-Key")
+    if tenant_key:
+        try:
+            request.state.tenant_id = await asyncio.to_thread(
+                auth.resolve_public_tenant, tenant_key, request.headers.get("Origin")
+            )
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     response = await call_next(request)
     path = request.url.path
     if path.startswith("/api/") and not path.startswith("/api/admin/") and path != "/api/analytics/events":
@@ -99,6 +134,7 @@ async def analytics_request_middleware(request, call_next):
         try:
             await asyncio.to_thread(
                 analytics.record_event, event_type,
+                tenant_id=getattr(request.state, "tenant_id", "default"),
                 conversation_id=request.headers.get("X-Conversation-ID"),
                 route=path, method=request.method, status_code=response.status_code,
                 duration_ms=duration_ms, metadata={"provider": provider},
@@ -188,6 +224,64 @@ async def health():
         ],
     }
 
+@app.post("/api/auth/login")
+async def auth_login(payload: LoginRequest):
+    return await asyncio.to_thread(auth.login, payload.username, payload.password)
+
+@app.get("/api/auth/me")
+async def auth_me(user: dict = Depends(current_user)):
+    return {"user": user}
+
+@app.post("/api/auth/logout")
+async def auth_logout(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth)):
+    token = credentials.credentials if credentials else None
+    await asyncio.to_thread(auth.revoke, token)
+    return {"status": "signed_out"}
+
+@app.get("/api/admin/tenants")
+async def admin_list_tenants(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
+    tenants = await asyncio.to_thread(auth.list_tenants)
+    return {"tenants": tenants}
+
+@app.get("/api/admin/tenants/{tenant_id}/users")
+async def admin_list_tenant_users(tenant_id: int, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к сотрудникам другого магазина")
+    users = await asyncio.to_thread(auth.list_users, tenant_id)
+    return {"users": users}
+
+@app.post("/api/admin/tenants")
+async def admin_create_tenant(payload: TenantCreateRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
+    try:
+        tenant = await asyncio.to_thread(auth.create_tenant, payload.name, payload.slug, payload.domains)
+        return {"tenant": tenant}
+    except Exception as exc:
+        if "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Магазин с таким идентификатором уже существует") from exc
+        raise
+
+@app.post("/api/admin/tenants/{tenant_id}/public-config")
+async def admin_update_tenant_public_config(tenant_id: int, payload: TenantPublicConfigRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нельзя менять настройки другого магазина")
+    result = await asyncio.to_thread(auth.update_tenant_public_config, tenant_id, payload.domains, True)
+    return {"tenant": result, "key_notice": "Сохраните public_key: он показывается только при создании или ротации."}
+
+
+@app.post("/api/admin/tenants/{tenant_id}/users")
+async def admin_create_tenant_user(tenant_id: int, payload: TenantUserCreateRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нельзя управлять сотрудниками другого магазина")
+    if user["role"] == "shop_admin" and payload.role == "shop_admin":
+        raise HTTPException(status_code=403, detail="Администратор магазина не может создавать других администраторов магазина")
+    created = await asyncio.to_thread(auth.create_user, tenant_id, payload.username, payload.display_name, payload.password, payload.role)
+    return {"user": created}
+
 @app.get("/api/language/v1/languages")
 async def language_languages():
     return await asyncio.to_thread(language_catalog)
@@ -237,11 +331,8 @@ def _authorize_admin(credentials: HTTPBasicCredentials | None = None, x_admin_to
 
 
 @app.get("/api/admin/traces")
-async def admin_traces(
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_traces(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
     return {
         "events": list(TRACE_EVENTS),
         "retained": len(TRACE_EVENTS),
@@ -252,6 +343,7 @@ async def admin_traces(
 @app.post("/api/analytics/events")
 async def analytics_event(
     payload: AnalyticsEventRequest,
+    request: Request,
     x_conversation_id: str | None = Header(default=None, alias="X-Conversation-ID"),
 ):
     allowed = {"chat_message", "conversation_started", "conversation_ended", "vehicle_confirmed",
@@ -262,6 +354,7 @@ async def analytics_event(
     try:
         await asyncio.to_thread(
             analytics.record_event, payload.event_type,
+            tenant_id=getattr(request.state, "tenant_id", "default"),
             conversation_id=conversation_id, metadata=payload.metadata,
         )
     except Exception as exc:
@@ -270,32 +363,26 @@ async def analytics_event(
 
 
 @app.get("/api/admin/analytics")
-async def admin_analytics(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_analytics(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        return await asyncio.to_thread(analytics.dashboard_summary, days)
+        return await asyncio.to_thread(analytics.dashboard_summary, days, tenant_id)
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
 
 @app.get("/api/admin/conversations")
-async def admin_conversations(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_conversations(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        rows = await asyncio.to_thread(analytics.conversation_summary, days)
-        return {"conversations": rows}
+        rows = await asyncio.to_thread(analytics.conversation_summary, days, tenant_id)
+        return {"conversations": rows, "scope": "tenant:" + tenant_id}
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
@@ -504,10 +591,11 @@ def _vehicle_completeness(vehicle: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _catalog_event(provider: str, route: str, mode: str, status_code: int,
-                        duration_ms: float, conversation_id: str | None = None):
+                        duration_ms: float, conversation_id: str | None = None,
+                        tenant_id: str = "default"):
     try:
         await asyncio.to_thread(
-            analytics.record_event, "catalog_request", conversation_id=conversation_id,
+            analytics.record_event, "catalog_request", tenant_id=tenant_id, conversation_id=conversation_id,
             route=route, method="POST", status_code=status_code, duration_ms=duration_ms,
             metadata={"provider": provider, "mode": mode},
         )
@@ -527,7 +615,7 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
         rows = await adapter.decode(vin, "vin", payload.lang)
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         if len(rows) != 1:
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
             return {
                 "vin": vin, "status": "ambiguous", "vehicle": None,
                 "vehicle_data_complete": False, "vehicle_missing_fields": ["vehicle_variant"],
@@ -536,9 +624,9 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
             }
         vehicle = _normalize_tradesoft_vehicle(rows[0])
         if vehicle.get("catalogId") is None or vehicle.get("carId") is None:
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"))
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
             raise HTTPException(status_code=502, detail="TradeSoft VIN response has no OEM catalogue identity.")
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         completeness = _vehicle_completeness(vehicle)
         trace("VIN decode", "tradesoft_parts_catalogs", "success", "TradeSoft OEM catalogue VIN lookup completed", {
             "catalog_verified": True,
@@ -557,7 +645,7 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
     except Exception as exc:
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"))
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("VIN decode", "tradesoft_parts_catalogs", "error", str(exc)[:240])
         raise HTTPException(status_code=status, detail={
             "provider": "tradesoft_parts_catalogs",
@@ -582,7 +670,7 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
         result = await adapter.lookup(vin or "", payload.mode, payload.q, payload.lang, payload.group_id)
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status = "ambiguous" if isinstance(result, dict) and result.get("status") == "ambiguous" else "success"
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"))
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("OEM catalogue lookup", "tradesoft_parts_catalogs", status, "TradeSoft OEM catalogue lookup completed", {
             "mode": payload.mode, "catalog_verified": True,
         })
@@ -604,7 +692,7 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
     except Exception as exc:
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status_code = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"))
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "error", str(exc)[:240], {"mode": payload.mode})
         raise HTTPException(status_code=status_code, detail={
             "provider": "tradesoft_parts_catalogs",

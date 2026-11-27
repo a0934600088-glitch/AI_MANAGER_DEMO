@@ -1,4 +1,4 @@
-# AI Manager Catalog API — v2.4.20
+# AI Manager — v2.4.26
 
 FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
@@ -31,7 +31,7 @@ The backend preserves the provider's `catalogId`, `carId` and `criteria` values.
 - `GET /api/catalog/v1/providers` — active TradeSoft provider and nine reserved slots.
 - `POST /api/catalog/v1/vehicles/decode` — real TradeSoft VIN decode.
 - `POST /api/catalog/v1/lookup` — `groups`, `diagrams`, `parts` and `models` requests. For `parts`, send `group_id` after selecting a group to retrieve OE part numbers and diagram callouts; without `group_id`, `q` searches schemas by part name.
-- `GET /api/admin/traces` — recent provider request trace; requires the `X-Admin-Token` header and a server-side `ADMIN_API_TOKEN`.
+- `GET /api/admin/traces` — recent provider request trace; requires a valid bearer session for the `super_admin` role.
 - `GET /docs` — interactive API documentation.
 
 ## Request examples
@@ -77,7 +77,35 @@ A successful health check confirms only that the FastAPI process is running. A s
 
 ## Security configuration
 
-- `ADMIN_API_TOKEN` — required server-side secret for the diagnostic trace endpoint. Without it, the endpoint is disabled; never place this token in frontend JavaScript or commit it to Git.
-- `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — server-side bootstrap credentials for the first platform administrator. The password is hashed before storage.
+- `ADMIN_API_TOKEN` — retained only for a legacy helper; the current trace route uses bearer-session authorization.
+- `CORS_ORIGINS` — comma-separated exact origins. Set `TENANT_CORS_ENABLED=true` only when tenant widgets must run on external shop domains; tenant-key requests are separately checked against the configured domain allowlist. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
 - Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
+
+
+## Tenant data attribution and public widget identity (v2.4.26 candidate)
+
+- Every tenant receives a random public widget key; only its SHA-256 digest is stored.
+- Customer widget requests send `X-Tenant-Key`. The API resolves the tenant server-side and verifies that the HTTPS `Origin` host is in that tenant's allowed-domain list.
+- Analytics events, request telemetry, VIN decode telemetry and OEM lookup telemetry are written with the resolved tenant ID. The browser cannot choose a tenant ID.
+- Store administrators can rotate the public key and update their own store's allowed domains; platform administrators can configure any store.
+- The widget accepts `window.AI_MANAGER_TENANT_KEY` before its main script executes. For external store domains, set `TENANT_CORS_ENABLED=true` on the backend; actual requests are still checked against the tenant's configured domain.
+- Existing events with `tenant_id='default'` remain in the legacy demo scope; they are not reassigned to a new store.
+- This release does not yet contain a durable customer profile/transcript store. Conversation reporting is based on tenant-scoped analytics events only. Do not interpret this as complete CRM history isolation.
+
+
+
+## Authentication and authorization
+
+- Bearer sessions are database-backed, opaque, expire after seven days, and are revocable.
+- Roles are `super_admin`, `shop_admin`, `manager`, and `observer`.
+- Tenant staff are bound to one tenant in the database. Shop administrators can manage staff only in their own shop and cannot create another shop administrator. Managers and observers cannot manage staff or platform tenants.
+- Analytics and conversation summaries always query using the server-derived tenant scope for shop users. The super administrator's legacy overview remains scoped to the legacy `default` demo data.
+
+## Release limitations
+
+- PostgreSQL integration tests run in CI against an ephemeral PostgreSQL 16 service and verify two-tenant event/conversation isolation plus tenant-key/domain binding.
+- Production migration rehearsal, backup/restore validation and post-deployment smoke tests have not yet been performed.
+- Session rate limiting, lockout, invitation email flow, durable customer profiles and full chat transcripts are not implemented.
+- This release isolates existing analytics and request telemetry; it is not a complete CRM/customer-history implementation.

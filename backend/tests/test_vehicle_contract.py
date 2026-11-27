@@ -115,6 +115,7 @@ class VehicleContractTests(unittest.TestCase):
             if middleware.cls.__name__ == "CORSMiddleware"
         )
         allowed_headers = [header.lower() for header in cors.kwargs["allow_headers"]]
+        self.assertIn("x-tenant-key", allowed_headers)
         self.assertIn("x-admin-token", allowed_headers)
 
     def test_catalogue_lookup_preserves_ambiguous_provider_status(self):
@@ -160,18 +161,13 @@ class VehicleContractTests(unittest.TestCase):
         finally:
             main.TRADESOFT_ADAPTER = previous
 
-    def test_admin_trace_endpoint_requires_configured_token(self):
-        previous = main.ADMIN_API_TOKEN
-        try:
-            main.ADMIN_API_TOKEN = "unit-test-value"
-            with self.assertRaises(HTTPException) as missing:
-                asyncio.run(main.admin_traces(None, None))
-            self.assertEqual(missing.exception.status_code, 401)
+    def test_admin_trace_endpoint_requires_super_admin_role(self):
+        with self.assertRaises(HTTPException) as denied:
+            asyncio.run(main.admin_traces({"role": "manager", "tenant_id": 7}))
+        self.assertEqual(denied.exception.status_code, 403)
 
-            result = asyncio.run(main.admin_traces(None, "unit-test-value"))
-            self.assertIn("events", result)
-        finally:
-            main.ADMIN_API_TOKEN = previous
+        result = asyncio.run(main.admin_traces({"role": "super_admin", "tenant_id": None}))
+        self.assertIn("events", result)
 
 
 if __name__ == "__main__":
