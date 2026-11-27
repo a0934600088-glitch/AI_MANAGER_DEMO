@@ -115,17 +115,17 @@ function collectFields(obj,out={},seen=new Set(),parent=''){
 }
 function expandDescriptionFields(fields){
  const raw=fields['Описание автомобиля'];if(!raw||typeof raw!=='string')return fields;delete fields['Описание автомобиля'];
- const text=raw.replace(/\\s+/g,' ').trim();
+ const text=raw.replace(/\s+/g,' ').trim();
  const put=(k,v)=>{v=String(v||'').trim().replace(/[.;,]+$/,'');if(v&&!fields[k])fields[k]=v};
- const region=text.match(/Regions?\\s*:\\s*(.*?)(?=,\\s*\\d+[- ]SPEED|$)/i);if(region)put('Регион',region[1]);
- const body=text.match(/^\\s*([A-Z0-9 ]*?\\b(?:COUPE|SEDAN|ESTATE|WAGON|CABRIOLET|HATCHBACK))\\s*[.,]/i);if(body)put('Тип кузова',body[1]);
- const trans=text.match(/(\\d+[- ]SPEED\\s+(?:AUTOMATIC|MANUAL)\\s+TRANSMISSION)\\s+([A-Z0-9-]+)/i);
+ const region=text.match(/Regions?\s*:\s*(.*?)(?=,\s*\d+[- ]SPEED|$)/i);if(region)put('Регион',region[1]);
+ const body=text.match(/^\s*([A-Z0-9 ]*?\b(?:COUPE|SEDAN|ESTATE|WAGON|CABRIOLET|HATCHBACK))\s*[.,]/i);if(body)put('Тип кузова',body[1]);
+ const trans=text.match(/(\d+[- ]SPEED\s+(?:AUTOMATIC|MANUAL)\s+TRANSMISSION)\s+([A-Z0-9-]+)/i);
  if(trans){put('Трансмиссия',trans[1]);put('Модель КПП',trans[2]);}
- const transCode=text.match(/\\b(\\d{3}\\.\\d{3})\\b/);if(transCode)put('Код КПП',transCode[1]);
- const engine=text.match(/\\b(R\\d+)\\s+(GASOLINE|PETROL|DIESEL)\\s+ENGINE\\s+([A-Z0-9. ]+?)(?=\\s*\\(|,|$)/i);
+ const transCode=text.match(/\b(\d{3}\.\d{3})\b/);if(transCode)put('Код КПП',transCode[1]);
+ const engine=text.match(/\b(R\d+)\s+(GASOLINE|PETROL|DIESEL)\s+ENGINE\s+([A-Z0-9. ]+?)(?=\s*\(|,|$)/i);
  if(engine){put('Цилиндры',engine[1].slice(1));put('Тип топлива',/DIESEL/i.test(engine[2])?'Дизель':'Бензин');put('Тип двигателя',engine[1]+' '+engine[2]+' ENGINE');put('Код двигателя',engine[3]);}
- const codes=[...text.matchAll(/\\b(\\d{3}\\.\\d{3})\\b/g)];if(codes.length>1)put('Код двигателя',codes[codes.length-1][1]);
- if(/\\b4MATIC\\b/i.test(text))put('Тип привода','4MATIC');return fields;
+ const codes=[...text.matchAll(/\b(\d{3}\.\d{3})\b/g)];if(codes.length>1)put('Код двигателя',codes[codes.length-1][1]);
+ if(/\b4MATIC\b/i.test(text))put('Тип привода','4MATIC');return fields;
 }
 
 function showVehicle(response){
