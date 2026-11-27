@@ -323,12 +323,74 @@ def _first_vehicle_text(record: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
-def _normalize_tradesoft_vehicle(record: dict[str, Any]) -> dict[str, Any]:
-    """Expose documented TradeSoft CarInfo fields in the stable UI contract.
+def _vehicle_attribute_key(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    key = re.sub(r"[^a-z0-9а-я]+", "", value.strip().lower())
+    aliases = {
+        "brand": "make", "make": "make", "manufacturer": "make", "manufacturername": "make",
+        "производитель": "make", "марка": "make", "виробник": "make",
+        "model": "model", "modelname": "model", "title": "model", "модель": "model",
+        "type": "type", "vehicletype": "type", "modification": "type", "тип": "type",
+        "year": "modelYear", "modelyear": "modelYear", "productionyear": "modelYear",
+        "manufactured": "modelYear", "годвыпуска": "modelYear", "годпроизводства": "modelYear",
+        "ріквиробництва": "modelYear", "ріквипуску": "modelYear",
+        "productiondate": "productionDate", "date": "productionDate", "датапроизводства": "productionDate",
+        "дата виробництва": "productionDate",
+        "engine": "engine", "engineinfo": "engineInfo", "enginedescription": "engineInfo",
+        "двигатель": "engineInfo", "двигун": "engineInfo",
+        "enginetype": "engineType", "motortype": "engineType", "типдвигателя": "engineType",
+        "типдвигуна": "engineType",
+        "enginecode": "engineCode", "коддвигателя": "engineCode", "коддвигуна": "engineCode",
+        "enginedisplacement": "engineDisplacement", "displacement": "engineDisplacement",
+        "capacity": "engineDisplacement", "объемдвигателя": "engineDisplacement",
+        "обємдвигуна": "engineDisplacement",
+        "power": "power", "enginepower": "power", "horsepower": "power", "мощностьдвигателя": "power",
+        "потужністьдвигуна": "power",
+        "fuel": "fuelType", "fueltype": "fuelType", "типтоплива": "fuelType", "топливо": "fuelType",
+        "типпалива": "fuelType", "паливо": "fuelType",
+        "cylindersvalves": "cylindersValves", "cylinders": "cylinders", "valves": "valves",
+        "цилиндрыклапаны": "cylindersValves", "цилиндры": "cylinders", "клапаны": "valves",
+        "циліндриклапани": "cylindersValves", "циліндри": "cylinders", "клапани": "valves",
+        "body": "body", "bodytype": "bodyType", "кузов": "body", "типкузова": "bodyType",
+        "fuelSystem": "fuelSystem", "fuelsystem": "fuelSystem", "injectiontype": "fuelSystem",
+        "топливнаясистема": "fuelSystem", "паливнасистема": "fuelSystem",
+        "drivetype": "driveType", "drivetrain": "driveType", "типпривода": "driveType",
+        "типприводу": "driveType",
+        "transmission": "transmission", "gearbox": "transmission", "трансмиссия": "transmission",
+        "трансмісія": "transmission", "коробка передач": "transmission",
+        "region": "region", "регион": "region", "регіон": "region",
+        "market": "market", "рынок": "market", "ринок": "market",
+        "tecdoc": "tecdocId", "tecdocid": "tecdocId", "идентификаторtecdoc": "tecdocId",
+        "идентифікаторtecdoc": "tecdocId",
+        "productionrange": "productionRange", "prodrange": "productionRange",
+        "периодпроизводства": "productionRange",
+    }
+    return aliases.get(key)
 
-    TradeSoft CarInfo uses 'title' and 'brand'; the chat UI consumes 'model'
-    and 'brand'. Keep every original provider field and identifier unchanged.
-    """
+
+def _parameter_pairs(value: Any):
+    """Yield label/value pairs from TradeSoft parameter arrays and nested objects."""
+    if isinstance(value, list):
+        for item in value:
+            yield from _parameter_pairs(item)
+    elif isinstance(value, dict):
+        label = next((value.get(k) for k in
+                      ("name", "title", "label", "parameterName", "parameter_name", "key")
+                      if isinstance(value.get(k), str) and value.get(k).strip()), None)
+        field_value = next((value.get(k) for k in
+                            ("value", "valueName", "value_name", "displayValue", "display_value",
+                             "valueText", "value_text", "text")
+                            if value.get(k) not in (None, "")), None)
+        if label is not None and field_value is not None and not isinstance(field_value, (dict, list)):
+            yield label, str(field_value).strip()
+        for key in ("parameters", "items", "values", "attributes", "data"):
+            if key in value and isinstance(value[key], (dict, list)):
+                yield from _parameter_pairs(value[key])
+
+
+def _normalize_tradesoft_vehicle(record: dict[str, Any]) -> dict[str, Any]:
+    """Preserve TradeSoft identity and expose detailed CarInfo/Car2 parameters."""
     normalized = dict(record)
     brand = _first_vehicle_text(record, "brand", "make", "manufacturer", "manufacturerName")
     model = _first_vehicle_text(
@@ -341,8 +403,30 @@ def _normalize_tradesoft_vehicle(record: dict[str, Any]) -> dict[str, Any]:
     if model:
         normalized["model"] = model
         normalized["model_description"] = model
-    return normalized
 
+    attributes: dict[str, str] = {}
+    # Normalize direct provider properties, including nested Car2 fields.
+    def walk(obj: Any):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                canonical = _vehicle_attribute_key(key)
+                if canonical and not isinstance(value, (dict, list)) and value not in (None, ""):
+                    attributes.setdefault(canonical, str(value).strip())
+                elif isinstance(value, (dict, list)):
+                    walk(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item)
+
+    walk(record)
+    for label, value in _parameter_pairs(record.get("parameters", [])):
+        canonical = _vehicle_attribute_key(label)
+        if canonical and value:
+            attributes.setdefault(canonical, value)
+
+    if attributes:
+        normalized["vehicle_attributes"] = attributes
+    return normalized
 
 def _has_nested_vehicle_field(record: Any, aliases: set[str]) -> bool:
     pending = [record]
