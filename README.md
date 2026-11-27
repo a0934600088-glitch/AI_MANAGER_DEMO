@@ -1,11 +1,17 @@
-# AI_MANAGER_DEMO v2.1.2
+# AI_MANAGER_DEMO — AI Manager 2.4.20
 
-Live test release: FastAPI serves the messenger and exposes public catalog integrations.
+Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration.
 
-## Live integrations
-- SoloCatalog MCP at https://solocatalog.com/mcp — VIN decode, parts search, diagrams and diagram parts. Light daily use is documented as available without a key; limits may apply.
-- NHTSA vPIC — public VIN decoder without a key. It is a VIN data source, not a parts catalog.
-- Up to 10 provider slots are reserved in the architecture; only the two integrations above are currently enabled. RockAuto and Tradesoft are not represented as connected.
+## Catalogue integration
+- **TradeSoft OEM Parts.Catalogs** — the sole OEM source configured by the application for VIN identification, vehicle catalogue lookup, original diagrams, OE numbers and callout positions. It is enabled only when TRADESOFT_ENABLED=true and a valid server-side TRADESOFT_API_TOKEN is present in Railway.
+- **NHTSA vPIC and SoloCatalog** — not used as fallback providers in this release.
+- **Parts-Info** — its key is not used by this backend; store assortment, prices and stock remain a separate CRM responsibility.
+
+## Vehicle identification
+1. VIN is resolved by TradeSoft /car/info.
+2. For one unambiguous vehicle, the backend requests the detailed vehicle record from /catalogs/{catalogId}/cars2/{carId} with the returned criteria.
+3. The original parameter payload is preserved and normalized into the stable customer vehicle-card fields.
+4. Missing parameters remain missing; the application does not infer engine, power, body or fitment.
 
 ## Run and deploy
-Docker builds from repository root and serves the UI at / plus API docs at /docs. No provider secrets are required for the two public integrations.
+The backend serves the messenger at / and API docs at /docs. Provider credentials must be stored as Railway service variables and must never be committed to Git or placed in browser code.
