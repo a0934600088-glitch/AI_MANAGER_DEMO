@@ -20,7 +20,7 @@ jobs:
         env:
           API_BASE: https://ai-manager-api-production.up.railway.app
         run: |
-          expected_version=$(tr -d '\\r\\n' < backend/VERSION)
+          expected_version=$(cat backend/VERSION)
           echo "Expected backend version: $expected_version"
           for attempt in $(seq 1 60); do
             payload=$(curl -fsS "$API_BASE/health" || true)
