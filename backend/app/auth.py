@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64, hashlib, hmac, os, secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlparse
 from fastapi import HTTPException
 from . import analytics
 
@@ -37,6 +38,9 @@ def ensure_schema() -> None:
                 status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())
         """)
+        conn.execute("ALTER TABLE ai_manager_tenants ADD COLUMN IF NOT EXISTS public_key_hash TEXT")
+        conn.execute("ALTER TABLE ai_manager_tenants ADD COLUMN IF NOT EXISTS allowed_domains TEXT[] NOT NULL DEFAULT '{}'")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_ai_manager_tenants_public_key_hash ON ai_manager_tenants(public_key_hash) WHERE public_key_hash IS NOT NULL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS ai_manager_users (
                 id BIGSERIAL PRIMARY KEY, tenant_id BIGINT REFERENCES ai_manager_tenants(id),
@@ -100,12 +104,71 @@ def require_role(user: dict[str, Any], *roles: str) -> dict[str, Any]:
     if user.get("role") not in roles: raise HTTPException(status_code=403, detail="Недостаточно прав")
     return user
 
-def create_tenant(name: str, slug: str) -> dict[str, Any]:
+def _normalize_domain(value: str) -> str:
+    raw = (value or "").strip().lower()
+    parsed = urlparse(raw if "://" in raw else "https://" + raw)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise HTTPException(status_code=422, detail="Укажите домен магазина без пути, например shop.example.com")
+    host = parsed.hostname.encode("idna").decode("ascii").lower()
+    if host == "localhost" or "." not in host:
+        raise HTTPException(status_code=422, detail="Для магазина нужен публичный домен")
+    return host
+
+
+def create_tenant(name: str, slug: str, domains: list[str] | None = None) -> dict[str, Any]:
     ensure_schema()
+    normalized_domains = sorted({_normalize_domain(item) for item in (domains or [])})
+    public_key = secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(public_key.encode("utf-8")).hexdigest()
     with analytics._connect() as conn:
-        row = conn.execute("""INSERT INTO ai_manager_tenants(name,slug) VALUES (%s,%s)
-            RETURNING id,name,slug,status,created_at""", (name.strip(), slug.strip().lower())).fetchone()
-    return dict(row)
+        row = conn.execute("""INSERT INTO ai_manager_tenants(name,slug,public_key_hash,allowed_domains)
+            VALUES (%s,%s,%s,%s)
+            RETURNING id,name,slug,status,allowed_domains,created_at""",
+            (name.strip(), slug.strip().lower(), key_hash, normalized_domains)).fetchone()
+    result = dict(row)
+    result["public_key"] = public_key
+    return result
+
+
+def update_tenant_public_config(tenant_id: int, domains: list[str], rotate_key: bool = False) -> dict[str, Any]:
+    ensure_schema()
+    normalized_domains = sorted({_normalize_domain(item) for item in domains})
+    if not normalized_domains:
+        raise HTTPException(status_code=422, detail="Нужно указать хотя бы один домен магазина")
+    public_key = secrets.token_urlsafe(32) if rotate_key else None
+    key_hash = hashlib.sha256(public_key.encode("utf-8")).hexdigest() if public_key else None
+    with analytics._connect() as conn:
+        if rotate_key:
+            row = conn.execute("""UPDATE ai_manager_tenants SET allowed_domains=%s, public_key_hash=%s
+                WHERE id=%s RETURNING id,name,slug,status,allowed_domains""",
+                (normalized_domains, key_hash, tenant_id)).fetchone()
+        else:
+            row = conn.execute("""UPDATE ai_manager_tenants SET allowed_domains=%s
+                WHERE id=%s RETURNING id,name,slug,status,allowed_domains""",
+                (normalized_domains, tenant_id)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Магазин не найден")
+    result = dict(row)
+    if public_key:
+        result["public_key"] = public_key
+    return result
+
+
+def resolve_public_tenant(public_key: str, origin: str | None) -> str:
+    if not public_key or len(public_key) > 200 or not origin:
+        raise HTTPException(status_code=403, detail="Tenant key and allowed Origin are required")
+    parsed = urlparse(origin)
+    host = (parsed.hostname or "").encode("idna").decode("ascii").lower()
+    if parsed.scheme != "https" or not host:
+        raise HTTPException(status_code=403, detail="Origin is not allowed")
+    ensure_schema()
+    digest = hashlib.sha256(public_key.encode("utf-8")).hexdigest()
+    with analytics._connect() as conn:
+        tenant = conn.execute("""SELECT id,allowed_domains FROM ai_manager_tenants
+            WHERE public_key_hash=%s AND status='active'""", (digest,)).fetchone()
+    if not tenant or host not in (tenant["allowed_domains"] or []):
+        raise HTTPException(status_code=403, detail="Tenant key or Origin is invalid")
+    return str(tenant["id"])
 
 def create_user(tenant_id: int, username: str, display_name: str, password: str, role: str) -> dict[str, Any]:
     if role not in {"shop_admin", "manager", "observer"}:
@@ -125,7 +188,7 @@ def create_user(tenant_id: int, username: str, display_name: str, password: str,
 def list_tenants() -> list[dict[str, Any]]:
     ensure_schema()
     with analytics._connect() as conn:
-        rows = conn.execute("SELECT id, name, slug, status, created_at FROM ai_manager_tenants ORDER BY name").fetchall()
+        rows = conn.execute("SELECT id, name, slug, status, allowed_domains, (public_key_hash IS NOT NULL) AS public_key_configured, created_at FROM ai_manager_tenants ORDER BY name").fetchall()
     return [dict(row) for row in rows]
 
 
