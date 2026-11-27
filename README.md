@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO — AI Manager 2.4.27
+# AI_MANAGER_DEMO — AI Manager 2.4.28
 
 Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration. The separate `admin.html` page provides a protected administrator analytics console.
 
