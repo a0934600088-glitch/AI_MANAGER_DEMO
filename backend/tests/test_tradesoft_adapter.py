@@ -201,6 +201,14 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r["params"]["partName"] for r in schema_requests], ["Brake pads", "Brake lining"])
         self.assertEqual(len(result["schemas"]["list"]), 1)
 
+    async def test_image_key_normalizes_tradesoft_resized_diagram_urls(self):
+        thumbnail = "https://img.parts-catalogs.com/r/300x430/vag_2026_03/vw/_colored/827/827615000.png?width=300"
+        original = "//img.parts-catalogs.com/vag_2026_03/vw/_colored/827/827615000.png"
+        self.assertEqual(
+            self.adapter._image_key(thumbnail),
+            self.adapter._image_key(original),
+        )
+
     async def test_schema_group_id_is_mapped_to_matching_groups2_leaf_image(self):
         schema_image = "//img.parts-catalogs.com/test/brake.png"
         self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
