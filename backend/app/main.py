@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.language import translate_texts, language_catalog
 from app.providers.tradesoft_parts_catalogs import TradesoftPartsCatalogsAdapter, TradesoftError
+from app import auth
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as version_file:
@@ -27,6 +28,7 @@ ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "").strip()
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 admin_auth = HTTPBasic(auto_error=False)
+bearer_auth = HTTPBearer(auto_error=False)
 TRADESOFT_ADAPTER = TradesoftPartsCatalogsAdapter(TRADESOFT_API_TOKEN, timeout_seconds=TIMEOUT_SECONDS) if TRADESOFT_ENABLED else None
 app = FastAPI(
     title="AI Manager Catalog API",
@@ -55,6 +57,24 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "Authorization", "X-Conversation-ID"],
 )
 
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
+
+class TenantCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    slug: str = Field(min_length=2, max_length=80, pattern="^[a-z0-9][a-z0-9-]*$")
+
+class TenantUserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=120)
+    display_name: str = Field(default="", max_length=160)
+    password: str = Field(min_length=12, max_length=256)
+    role: Literal["shop_admin", "manager", "observer"] = "manager"
+
+async def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth)):
+    token = credentials.credentials if credentials else None
+    return await asyncio.to_thread(auth.authenticate, token)
 
 class DecodeRequest(BaseModel):
     vin: str = Field(min_length=5, max_length=40)
@@ -188,6 +208,53 @@ async def health():
         ],
     }
 
+@app.post("/api/auth/login")
+async def auth_login(payload: LoginRequest):
+    return await asyncio.to_thread(auth.login, payload.username, payload.password)
+
+@app.get("/api/auth/me")
+async def auth_me(user: dict = Depends(current_user)):
+    return {"user": user}
+
+@app.post("/api/auth/logout")
+async def auth_logout(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_auth)):
+    token = credentials.credentials if credentials else None
+    await asyncio.to_thread(auth.revoke, token)
+    return {"status": "signed_out"}
+
+@app.get("/api/admin/tenants")
+async def admin_list_tenants(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
+    tenants = await asyncio.to_thread(auth.list_tenants)
+    return {"tenants": tenants}
+
+@app.get("/api/admin/tenants/{tenant_id}/users")
+async def admin_list_tenant_users(tenant_id: int, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к сотрудникам другого магазина")
+    users = await asyncio.to_thread(auth.list_users, tenant_id)
+    return {"users": users}
+
+@app.post("/api/admin/tenants")
+async def admin_create_tenant(payload: TenantCreateRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
+    try:
+        tenant = await asyncio.to_thread(auth.create_tenant, payload.name, payload.slug)
+        return {"tenant": tenant}
+    except Exception as exc:
+        if "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Магазин с таким идентификатором уже существует") from exc
+        raise
+
+@app.post("/api/admin/tenants/{tenant_id}/users")
+async def admin_create_tenant_user(tenant_id: int, payload: TenantUserCreateRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нельзя управлять сотрудниками другого магазина")
+    created = await asyncio.to_thread(auth.create_user, tenant_id, payload.username, payload.display_name, payload.password, payload.role)
+    return {"user": created}
+
 @app.get("/api/language/v1/languages")
 async def language_languages():
     return await asyncio.to_thread(language_catalog)
@@ -237,11 +304,8 @@ def _authorize_admin(credentials: HTTPBasicCredentials | None = None, x_admin_to
 
 
 @app.get("/api/admin/traces")
-async def admin_traces(
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_traces(user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin")
     return {
         "events": list(TRACE_EVENTS),
         "retained": len(TRACE_EVENTS),
@@ -270,32 +334,26 @@ async def analytics_event(
 
 
 @app.get("/api/admin/analytics")
-async def admin_analytics(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_analytics(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        return await asyncio.to_thread(analytics.dashboard_summary, days)
+        return await asyncio.to_thread(analytics.dashboard_summary, days, tenant_id)
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 
 
 @app.get("/api/admin/conversations")
-async def admin_conversations(
-    days: int = 30,
-    credentials: HTTPBasicCredentials | None = Depends(admin_auth),
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-):
-    _authorize_admin(credentials, x_admin_token)
+async def admin_conversations(days: int = 30, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin", "manager", "observer")
     if days not in {7, 30, 90}:
         raise HTTPException(status_code=422, detail="days must be 7, 30 or 90")
+    tenant_id = "default" if user["role"] == "super_admin" else str(user["tenant_id"])
     try:
-        rows = await asyncio.to_thread(analytics.conversation_summary, days)
-        return {"conversations": rows}
+        rows = await asyncio.to_thread(analytics.conversation_summary, days, tenant_id)
+        return {"conversations": rows, "scope": "tenant:" + tenant_id}
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Analytics database is unavailable or not configured.") from exc
 

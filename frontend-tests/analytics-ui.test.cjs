@@ -54,3 +54,17 @@ test('unavailable sales and AI metrics are explicitly marked rather than fabrica
   assert.match(analytics, /offer_created/);
   assert.match(analytics, /order_created/);
 });
+
+test('admin and manager use one role-checked bearer login', () => {
+  assert.match(admin, /id="accessMode"/);
+  assert.match(admin, /value="admin">Администратор/);
+  assert.match(admin, /value="manager">Менеджер магазина/);
+  assert.ok(admin.includes("api/auth/login"));
+  assert.match(admin, /Authorization:'Bearer '\+auth/);
+  assert.match(admin, /Эта учётная запись не имеет доступа к выбранному кабинету/);
+  assert.ok(admin.includes("api/auth/logout"));
+  assert.doesNotMatch(admin, /auth='Basic '/);
+  assert.match(backend, /tenant_id = "default" if user\["role"\] == "super_admin" else str\(user\["tenant_id"\]\)/);
+  assert.match(analytics, /def dashboard_summary\(days: int = 30, tenant_id: str = "default"\)/);
+  assert.match(analytics, /def conversation_summary\(days: int = 30, tenant_id: str = "default"\)/);
+});

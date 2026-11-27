@@ -75,6 +75,31 @@ class AdminAnalyticsContractTests(unittest.TestCase):
             if old is not None:
                 __import__("os").environ["DATABASE_URL"] = old
 
+    def test_manager_analytics_is_scoped_to_its_tenant(self):
+        user = {"role": "manager", "tenant_id": 42}
+        with patch("app.main.analytics.dashboard_summary", return_value={"scope": "tenant:42"}) as summary:
+            result = asyncio.run(main.admin_analytics(30, user))
+        self.assertEqual(result["scope"], "tenant:42")
+        summary.assert_called_once_with(30, "42")
+
+    def test_super_admin_analytics_uses_platform_demo_scope(self):
+        user = {"role": "super_admin", "tenant_id": None}
+        with patch("app.main.analytics.dashboard_summary", return_value={"scope": "tenant:default"}) as summary:
+            asyncio.run(main.admin_analytics(7, user))
+        summary.assert_called_once_with(7, "default")
+
+    def test_manager_conversations_are_scoped_to_its_tenant(self):
+        user = {"role": "manager", "tenant_id": 19}
+        with patch("app.main.analytics.conversation_summary", return_value=[]) as summary:
+            result = asyncio.run(main.admin_conversations(90, user))
+        self.assertEqual(result["scope"], "tenant:19")
+        summary.assert_called_once_with(90, "19")
+
+    def test_unknown_role_cannot_open_analytics(self):
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(main.admin_analytics(30, {"role": "unknown", "tenant_id": 1}))
+        self.assertEqual(error.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()
