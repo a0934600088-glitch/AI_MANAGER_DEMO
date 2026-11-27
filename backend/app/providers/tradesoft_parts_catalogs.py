@@ -192,15 +192,40 @@ class TradesoftPartsCatalogsAdapter:
 
         if not query or not query.strip():
             raise TradesoftError("missing_query", "A part name is required for OEM catalogue search.")
-        params = dict(base_params)
-        params["partName"] = query.strip()
-        schemas = await self._get(f"/catalogs/{catalog_id}/schemas", params, lang)
+        # TradeSoft's documented name-search flow is two requests:
+        # groups-suggest(q) -> sid, then schemas(carId, partNameIds, partName).
+        # groups-by-sid is deprecated and must not be used.
+        part_query = query.strip()
+        suggestions_payload = await self._get(
+            f"/catalogs/{catalog_id}/groups-suggest",
+            {"q": part_query},
+            lang,
+        )
+        suggestions = self._rows(suggestions_payload)
+
+        suggestion_ids: list[str] = []
+        normalized_suggestions: list[dict[str, Any]] = []
+        for suggestion in suggestions:
+            sid = suggestion.get("sid", suggestion.get("id"))
+            name = suggestion.get("name") or suggestion.get("title") or part_query
+            if sid is None or not str(sid).strip():
+                continue
+            sid_text = str(sid).strip()
+            if sid_text not in suggestion_ids:
+                suggestion_ids.append(sid_text)
+            normalized_suggestions.append({"sid": sid_text, "name": str(name)})
+
+        schema_params: dict[str, Any] = {"carId": car_id, "partName": part_query}
+        if suggestion_ids:
+            schema_params["partNameIds"] = ",".join(suggestion_ids)
+        schemas = await self._get(f"/catalogs/{catalog_id}/schemas", schema_params, lang)
         return {
             "vehicle": car,
             "catalogId": catalog_id,
             "carId": car_id,
             "criteria": criteria,
-            "query": query.strip(),
+            "query": part_query,
+            "suggestions": normalized_suggestions,
             "schemas": schemas,
-            "note": "Schema search is returned by the OEM catalogue. Call parts2 with a selected groupId to retrieve OE part numbers and diagram callouts.",
+            "note": "Select a returned schema, then call parts2 with its groupId to retrieve OE part numbers and diagram callouts.",
         }
