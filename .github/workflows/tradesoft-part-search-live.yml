@@ -80,7 +80,7 @@ jobs:
               const groups = rows(diagram.partGroups || diagram.part_groups);
               const parts = Array.isArray(diagram.parts) ? diagram.parts : groups.flatMap(group => rows(group.parts));
               const positions = rows(diagram.positions);
-              const normalizeImage = value => { const text=String(value||''); return (text.startsWith('//')?'https:'+text:text).replace(/^http:/,'https:').split('?')[0].replace(/\\/r\\/\\d+x\\d+\\//i,'/'); };
+              const normalizeImage = value => { const text=String(value||''); return (text.startsWith('//')?'https:'+text:text).replace(/^http:/,'https:').split('?')[0].replace(/\/r\/\d+x\d+\//i,'/'); };
               if (!diagram.img || !positions.length || !parts.length) {
                 throw new Error(item.q + ': no complete original TradeSoft diagram, positions and parts');
               }
