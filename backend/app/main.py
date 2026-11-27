@@ -326,7 +326,7 @@ def _first_vehicle_text(record: dict[str, Any], *keys: str) -> str | None:
 def _vehicle_attribute_key(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
-    key = re.sub(r"[^a-z0-9а-я]+", "", value.strip().lower())
+    key = "".join(char for char in value.strip().lower() if char.isalnum())
     aliases = {
         "brand": "make", "make": "make", "manufacturer": "make", "manufacturername": "make",
         "производитель": "make", "марка": "make", "виробник": "make",
@@ -453,7 +453,7 @@ def _vehicle_completeness(vehicle: dict[str, Any]) -> dict[str, Any]:
         vehicle, {"year", "modelyear", "productionyear", "manufactured", "date", "productiondate"}
     )
     has_engine = _has_nested_vehicle_field(
-        vehicle, {"engine", "enginecode", "engineinfo", "motortype", "enginevariant"}
+        vehicle, {"engine", "enginecode", "engineinfo", "enginetype", "enginedisplacement", "motortype", "enginevariant"}
     )
     missing = []
     if not identity_complete:
