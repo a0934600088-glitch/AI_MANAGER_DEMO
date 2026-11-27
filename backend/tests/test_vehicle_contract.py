@@ -47,6 +47,24 @@ class VehicleContractTests(unittest.TestCase):
         self.assertEqual(vehicle["vehicle_attributes"]["fuelSystem"], "Direct injection")
         self.assertEqual(vehicle["vehicle_attributes"]["driveType"], "AWD")
         self.assertEqual(vehicle["vehicle_attributes"]["tecdocId"], "122128")
+    def test_mercedes_trade_soft_description_is_split_into_explicit_card_fields(self):
+        vehicle = main._normalize_tradesoft_vehicle({
+            "brand": "Mercedes", "modelName": "C-class", "title": "205.349 (C 300 4MATIC)",
+            "description": "C COUPE. . Regions: Europe, North America, Japan, 7-SPEED AUTOMATIC TRANSMISSION W7X700 (722969 06 680783, 722.969), R4 GASOLINE ENGINE M274 E20 (274920 30 609221, 274.920, M274 E20)",
+            "parameters": [{"name":"Year","value":"2016"},{"name":"Production date","value":"05.02.2016"}],
+        })
+        a = vehicle["vehicle_attributes"]
+        self.assertEqual(a["region"], "Europe, North America, Japan")
+        self.assertEqual(a["bodyType"], "C COUPE")
+        self.assertEqual(a["transmission"], "7-SPEED AUTOMATIC TRANSMISSION")
+        self.assertEqual(a["gearboxModel"], "W7X700")
+        self.assertEqual(a["gearboxCode"], "722.969")
+        self.assertEqual(a["fuelType"], "Petrol")
+        self.assertEqual(a["cylinders"], "4")
+        self.assertIn("M274 E20", a["engineCode"])
+        self.assertEqual(a["productionDate"], "05.02.2016")
+        self.assertEqual(a["modelYear"], "2016")
+
     def test_identity_alone_is_not_marked_as_complete_vehicle_data(self):
         result = main._vehicle_completeness({
             "brand": "VOLKSWAGEN",
