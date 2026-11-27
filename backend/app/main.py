@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from app.language import translate_texts, language_catalog
@@ -54,7 +54,8 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "Authorization", "X-Conversation-ID"],
+    allow_headers=["Content-Type", "X-Request-ID", "X-Admin-Token", "Authorization", "X-Conversation-ID", "X-Tenant-Key"],
+    allow_origin_regex=r"https://[A-Za-z0-9.-]+" if os.getenv("TENANT_CORS_ENABLED", "false").lower() == "true" else None,
 )
 
 
@@ -65,6 +66,11 @@ class LoginRequest(BaseModel):
 class TenantCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(min_length=2, max_length=80, pattern="^[a-z0-9][a-z0-9-]*$")
+    domains: list[str] = Field(min_length=1, max_length=10)
+
+
+class TenantPublicConfigRequest(BaseModel):
+    domains: list[str] = Field(min_length=1, max_length=10)
 
 class TenantUserCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=120)
@@ -110,6 +116,15 @@ from app import analytics
 @app.middleware("http")
 async def analytics_request_middleware(request, call_next):
     started = asyncio.get_running_loop().time()
+    request.state.tenant_id = "default"
+    tenant_key = request.headers.get("X-Tenant-Key")
+    if tenant_key:
+        try:
+            request.state.tenant_id = await asyncio.to_thread(
+                auth.resolve_public_tenant, tenant_key, request.headers.get("Origin")
+            )
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     response = await call_next(request)
     path = request.url.path
     if path.startswith("/api/") and not path.startswith("/api/admin/") and path != "/api/analytics/events":
@@ -119,6 +134,7 @@ async def analytics_request_middleware(request, call_next):
         try:
             await asyncio.to_thread(
                 analytics.record_event, event_type,
+                tenant_id=request.state.tenant_id,
                 conversation_id=request.headers.get("X-Conversation-ID"),
                 route=path, method=request.method, status_code=response.status_code,
                 duration_ms=duration_ms, metadata={"provider": provider},
@@ -240,12 +256,21 @@ async def admin_list_tenant_users(tenant_id: int, user: dict = Depends(current_u
 async def admin_create_tenant(payload: TenantCreateRequest, user: dict = Depends(current_user)):
     auth.require_role(user, "super_admin")
     try:
-        tenant = await asyncio.to_thread(auth.create_tenant, payload.name, payload.slug)
+        tenant = await asyncio.to_thread(auth.create_tenant, payload.name, payload.slug, payload.domains)
         return {"tenant": tenant}
     except Exception as exc:
         if "unique" in str(exc).lower():
             raise HTTPException(status_code=409, detail="Магазин с таким идентификатором уже существует") from exc
         raise
+
+@app.post("/api/admin/tenants/{tenant_id}/public-config")
+async def admin_update_tenant_public_config(tenant_id: int, payload: TenantPublicConfigRequest, user: dict = Depends(current_user)):
+    auth.require_role(user, "super_admin", "shop_admin")
+    if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Нельзя менять настройки другого магазина")
+    result = await asyncio.to_thread(auth.update_tenant_public_config, tenant_id, payload.domains, True)
+    return {"tenant": result, "key_notice": "Сохраните public_key: он показывается только при создании или ротации."}
+
 
 @app.post("/api/admin/tenants/{tenant_id}/users")
 async def admin_create_tenant_user(tenant_id: int, payload: TenantUserCreateRequest, user: dict = Depends(current_user)):
@@ -318,6 +343,7 @@ async def admin_traces(user: dict = Depends(current_user)):
 @app.post("/api/analytics/events")
 async def analytics_event(
     payload: AnalyticsEventRequest,
+    request: Request,
     x_conversation_id: str | None = Header(default=None, alias="X-Conversation-ID"),
 ):
     allowed = {"chat_message", "conversation_started", "conversation_ended", "vehicle_confirmed",
@@ -328,6 +354,7 @@ async def analytics_event(
     try:
         await asyncio.to_thread(
             analytics.record_event, payload.event_type,
+            tenant_id=request.state.tenant_id,
             conversation_id=conversation_id, metadata=payload.metadata,
         )
     except Exception as exc:
@@ -567,7 +594,7 @@ async def _catalog_event(provider: str, route: str, mode: str, status_code: int,
                         duration_ms: float, conversation_id: str | None = None):
     try:
         await asyncio.to_thread(
-            analytics.record_event, "catalog_request", conversation_id=conversation_id,
+            analytics.record_event, "catalog_request", tenant_id=tenant_id, conversation_id=conversation_id,
             route=route, method="POST", status_code=status_code, duration_ms=duration_ms,
             metadata={"provider": provider, "mode": mode},
         )
@@ -587,7 +614,7 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
         rows = await adapter.decode(vin, "vin", payload.lang)
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         if len(rows) != 1:
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"))
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
             return {
                 "vin": vin, "status": "ambiguous", "vehicle": None,
                 "vehicle_data_complete": False, "vehicle_missing_fields": ["vehicle_variant"],
