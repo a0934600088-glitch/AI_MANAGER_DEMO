@@ -42,7 +42,8 @@ jobs:
           const queries = [
             {q:'тормозные колодки | колодки тормозные | тормозная колодка | brake pads | brake pad', match:'колод'},
             {q:'тормозные диски | тормозной диск | диск тормозной | brake disc | brake rotor', match:'диск'},
-            {q:'передние амортизаторы | амортизатор | стойка амортизатора | shock absorber | damper | strut', match:'амортиз'}
+            {q:'передние амортизаторы | амортизатор | стойка амортизатора | shock absorber | damper | strut', match:'амортиз'},
+            {q:'поршень двигателя | поршень | поршень мотора | engine piston | piston', match:'piston'}
           ];
           async function post(body, label) {
             const response = await fetch(base + '/api/catalog/v1/lookup', {
