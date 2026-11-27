@@ -20,7 +20,7 @@ test('analytics instrumentation does not send raw message text', () => {
   assert.match(chat, /trackEvent\('chat_message'/);
   assert.match(chat, /X-Conversation-ID/);
   assert.match(chat, /X-Tenant-Key/);
-  assert.match(chat, /window\\.AI_MANAGER_TENANT_KEY/);
+  assert.match(chat, /window\.AI_MANAGER_TENANT_KEY/);
   assert.match(chat, /trackEvent\('vehicle_confirmed'/);
   assert.match(chat, /catalogVerified=!!d\?\.is_oem_catalog_verified/);
   assert.match(chat, /if\(!catalogVerified\)/);
