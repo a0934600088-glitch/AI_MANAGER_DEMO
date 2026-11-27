@@ -133,6 +133,22 @@ class AdminAnalyticsContractTests(unittest.TestCase):
             asyncio.run(main.admin_create_tenant(payload, {"role": "shop_admin", "tenant_id": 42}))
         self.assertEqual(error.exception.status_code, 403)
 
+    def test_manager_cannot_rotate_public_tenant_key(self):
+        payload = main.TenantPublicConfigRequest(domains=["shop.example.com"])
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(main.admin_update_tenant_public_config(
+                42, payload, {"role": "manager", "tenant_id": 42}
+            ))
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_shop_admin_cannot_change_another_tenants_public_config(self):
+        payload = main.TenantPublicConfigRequest(domains=["other.example.com"])
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(main.admin_update_tenant_public_config(
+                43, payload, {"role": "shop_admin", "tenant_id": 42}
+            ))
+        self.assertEqual(error.exception.status_code, 403)
+
     def test_unknown_role_cannot_open_analytics(self):
         with self.assertRaises(HTTPException) as error:
             asyncio.run(main.admin_analytics(30, {"role": "unknown", "tenant_id": 1}))
