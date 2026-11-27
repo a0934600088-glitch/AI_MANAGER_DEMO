@@ -62,6 +62,15 @@ jobs:
               if (!schemas.length) throw new Error(query + ': TradeSoft returned no original schemas');
               const schema = schemas.find(item => item.groupId ?? item.group_id ?? item.groupID ?? item.group?.id ?? item.id) || schemas[0];
               const envelopeGroup = result.schemas?.group || {};
+              const treeResult = await post({vin, mode:'groups', lang:'ru'}, query + ' root groups');
+              const rootGroups = rows(treeResult.groups);
+              console.log('groups2 root sample=' + JSON.stringify(rootGroups.slice(0,8).map(group => ({
+                id:group.groupId ?? group.group_id ?? group.id,
+                name:group.name,
+                hasParts:group.hasParts,
+                hasSubgroups:group.hasSubgroups,
+                img:group.img
+              }))).slice(0,7000));
               const candidates = [
                 schema.groupId, schema.group_id, schema.groupID, schema.group?.id, schema.id,
                 envelopeGroup.groupId, envelopeGroup.group_id, envelopeGroup.id
