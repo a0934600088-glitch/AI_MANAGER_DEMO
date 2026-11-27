@@ -36,7 +36,7 @@ test('TradeSoft camelCase vehicle parameters are extracted for the card', () => 
 
 test('normalized Car2 parameter rows reach the vehicle card as stable attributes', () => {
   const start = html.indexOf('function collectFields(');
-  const end = html.indexOf('\\nfunction showVehicle(', start);
+  const end = html.indexOf('\nfunction showVehicle(', start);
   const context = {};
   vm.runInNewContext(html.slice(start, end) + '\\nglobalThis.__collectFields = collectFields;', context);
   const fields = context.__collectFields({
