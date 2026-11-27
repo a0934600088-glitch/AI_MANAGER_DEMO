@@ -393,29 +393,29 @@ def _description_vehicle_attributes(description: Any) -> dict[str, str]:
     """Extract only explicit structured facts embedded in TradeSoft descriptions."""
     if not isinstance(description, str) or not description.strip():
         return {}
-    text = re.sub(r"\\s+", " ", description).strip()
+    text = re.sub(r"\s+", " ", description).strip()
     found: dict[str, str] = {}
     def put(key: str, value: str | None) -> None:
         if value and value.strip():
             found.setdefault(key, value.strip().rstrip(" .;,"))
-    region = re.search(r"Regions?\\s*:\\s*(.*?)(?=,\\s*\\d+[- ]SPEED|$)", text, re.I)
+    region = re.search(r"Regions?\s*:\s*(.*?)(?=,\s*\d+[- ]SPEED|$)", text, re.I)
     if region: put("region", region.group(1))
-    body = re.match(r"\\s*([A-Z0-9 ]*?\\b(?:COUPE|SEDAN|ESTATE|WAGON|CABRIOLET|HATCHBACK))\\s*[.,]", text, re.I)
+    body = re.match(r"\s*([A-Z0-9 ]*?\b(?:COUPE|SEDAN|ESTATE|WAGON|CABRIOLET|HATCHBACK))\s*[.,]", text, re.I)
     if body: put("bodyType", body.group(1))
-    trans = re.search(r"(\\d+[- ]SPEED\\s+(?:AUTOMATIC|MANUAL)\\s+TRANSMISSION)\\s+([A-Z0-9-]+)", text, re.I)
+    trans = re.search(r"(\d+[- ]SPEED\s+(?:AUTOMATIC|MANUAL)\s+TRANSMISSION)\s+([A-Z0-9-]+)", text, re.I)
     if trans:
         put("transmission", trans.group(1)); put("gearboxModel", trans.group(2))
-        codes = re.findall(r"\\b\\d{3}\\.\\d{3}\\b", trans.group(0))
+        codes = re.findall(r"\b\d{3}\.\d{3}\b", trans.group(0))
         if codes: put("gearboxCode", codes[-1])
-    engine = re.search(r"\\b(R\\d+)\\s+(GASOLINE|PETROL|DIESEL)\\s+ENGINE\\s+([A-Z0-9. ]+?)(?=\\s*\\(|,|$)", text, re.I)
+    engine = re.search(r"\b(R\d+)\s+(GASOLINE|PETROL|DIESEL)\s+ENGINE\s+([A-Z0-9. ]+?)(?=\s*\(|,|$)", text, re.I)
     if engine:
         put("cylinders", engine.group(1)[1:])
         put("fuelType", "Petrol" if engine.group(2).upper() in {"GASOLINE","PETROL"} else "Diesel")
         put("engineInfo", f"{engine.group(1)} {engine.group(2).upper()} ENGINE")
         put("engineCode", engine.group(3))
-        codes = re.findall(r"\\b\\d{3}\\.\\d{3}\\b", text[engine.end():])
+        codes = re.findall(r"\b\d{3}\.\d{3}\b", text[engine.end():])
         if codes: put("engineCode", codes[0])
-    if re.search(r"\\b4MATIC\\b", text, re.I): put("driveType", "4MATIC")
+    if re.search(r"\b4MATIC\b", text, re.I): put("driveType", "4MATIC")
     return found
 
 
