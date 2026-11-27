@@ -591,7 +591,8 @@ def _vehicle_completeness(vehicle: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _catalog_event(provider: str, route: str, mode: str, status_code: int,
-                        duration_ms: float, conversation_id: str | None = None):
+                        duration_ms: float, conversation_id: str | None = None,
+                        tenant_id: str = "default"):
     try:
         await asyncio.to_thread(
             analytics.record_event, "catalog_request", tenant_id=tenant_id, conversation_id=conversation_id,
