@@ -90,7 +90,7 @@ class TradesoftPartsCatalogsAdapter:
         if isinstance(payload, list):
             return [row for row in payload if isinstance(row, dict)]
         if isinstance(payload, dict):
-            for key in ("data", "items", "results", "cars", "list"):
+            for key in ("data", "items", "results", "cars", "list", "groups"):
                 value = payload.get(key)
                 if isinstance(value, list):
                     return [row for row in value if isinstance(row, dict)]
@@ -132,6 +132,168 @@ class TradesoftPartsCatalogsAdapter:
         async with self._lock:
             self._cache[cache_key] = (time.monotonic() + 86400, candidates)
         return candidates
+
+    @staticmethod
+    def _truthy(value: Any) -> bool:
+        return value is True or value == 1 or str(value).strip().lower() in {"true", "1", "yes"}
+
+    @staticmethod
+    def _schema_group_id(row: dict[str, Any]) -> Any:
+        for key in ("groupId", "group_id", "groupID", "id", "Id"):
+            value = row.get(key)
+            if value not in (None, ""):
+                return value
+        return None
+
+    @staticmethod
+    def _image_key(value: Any) -> str:
+        image = str(value or "").strip().split("?", 1)[0]
+        if image.startswith("https://"):
+            image = image[8:]
+        elif image.startswith("http://"):
+            image = image[7:]
+        elif image.startswith("//"):
+            image = image[2:]
+        return image.rstrip("/")
+
+    @classmethod
+    def _parts_payload_complete(cls, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        groups = payload.get("partGroups") or payload.get("part_groups") or []
+        if not isinstance(groups, list):
+            return False
+        parts = payload.get("parts") if isinstance(payload.get("parts"), list) else []
+        if not parts:
+            parts = [
+                part
+                for group in groups if isinstance(group, dict)
+                for part in (group.get("parts") or [])
+                if isinstance(part, dict)
+            ]
+        positions = payload.get("positions") or []
+        return bool(payload.get("img") and parts and isinstance(positions, list) and positions)
+
+    async def _search_schemas(
+        self, catalog_id: Any, car_id: Any, query: str, lang: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+        # The browser's terminology engine sends alternatives separated by "|".
+        # Search every phrase independently; TradeSoft q is not a multi-term expression.
+        terms = list(dict.fromkeys(term.strip() for term in query.split("|") if term.strip()))
+        if not terms:
+            terms = [query.strip()]
+
+        suggestions_by_id: dict[str, dict[str, Any]] = {}
+        schemas_by_id: dict[str, dict[str, Any]] = {}
+        first_payload: Any = None
+        for term in terms:
+            suggestions_payload = await self._get(
+                f"/catalogs/{catalog_id}/groups-suggest", {"q": term}, lang
+            )
+            term_ids: list[str] = []
+            for suggestion in self._rows(suggestions_payload):
+                sid = suggestion.get("sid", suggestion.get("id"))
+                if sid is None or not str(sid).strip():
+                    continue
+                sid_text = str(sid).strip()
+                term_ids.append(sid_text)
+                suggestions_by_id.setdefault(sid_text, {
+                    "sid": sid_text,
+                    "name": str(suggestion.get("name") or suggestion.get("title") or term),
+                })
+
+            schema_params: dict[str, Any] = {"carId": car_id, "partName": term}
+            if term_ids:
+                schema_params["partNameIds"] = ",".join(dict.fromkeys(term_ids))
+            schema_payload = await self._get(
+                f"/catalogs/{catalog_id}/schemas", schema_params, lang
+            )
+            if first_payload is None:
+                first_payload = schema_payload
+            for schema in self._rows(schema_payload):
+                schema_id = self._schema_group_id(schema)
+                dedupe_key = str(schema_id) if schema_id is not None else (
+                    self._image_key(schema.get("img")) + "|" + str(schema.get("name") or "")
+                )
+                schemas_by_id.setdefault(dedupe_key, schema)
+
+        rows = list(schemas_by_id.values())
+        if isinstance(first_payload, dict):
+            envelope = dict(first_payload)
+            list_key = next(
+                (key for key in ("list", "data", "items", "results", "schemas")
+                 if isinstance(envelope.get(key), list)),
+                "list",
+            )
+            envelope[list_key] = rows
+        else:
+            envelope = {"list": rows}
+        return list(suggestions_by_id.values()), envelope, rows
+
+    async def _groups_matching_schema_image(
+        self,
+        catalog_id: Any,
+        base_params: dict[str, Any],
+        schema_image: Any,
+        query: str,
+        lang: str,
+    ) -> list[dict[str, Any]]:
+        image_key = self._image_key(schema_image)
+        if not image_key:
+            return []
+        query_text = query.lower()
+        if any(term in query_text for term in ("тормоз", "колод", "диск", "brake", "rotor", "pad", "гальм")):
+            category_terms = ("тормоз", "brake")
+        elif any(term in query_text for term in ("амортиз", "shock", "strut", "подвес", "suspension", "сайлент", "bushing", "рычаг", "control arm")):
+            category_terms = ("подвес", "suspension", "chassis")
+        else:
+            category_terms = ()
+
+        root_payload = await self._get(
+            f"/catalogs/{catalog_id}/groups2/", dict(base_params), lang
+        )
+        roots = self._rows(root_payload)
+        selected_roots = [
+            root for root in roots
+            if not category_terms or any(term in str(root.get("name") or "").lower() for term in category_terms)
+        ]
+        if not selected_roots:
+            selected_roots = roots
+
+        matches: list[dict[str, Any]] = []
+        visited: set[str] = set()
+        visited_count = 0
+
+        async def walk(group: dict[str, Any], depth: int = 0) -> None:
+            nonlocal visited_count
+            if depth > 8 or visited_count >= 500:
+                return
+            group_id_value = self._schema_group_id(group)
+            if group_id_value is None:
+                return
+            key = str(group_id_value)
+            if key in visited:
+                return
+            visited.add(key)
+            visited_count += 1
+
+            has_parts = self._truthy(group.get("hasParts", group.get("has_parts")))
+            has_subgroups = self._truthy(group.get("hasSubgroups", group.get("has_subgroups")))
+            if has_parts and self._image_key(group.get("img")) == image_key:
+                matches.append(group)
+            if not has_subgroups:
+                return
+            child_params = dict(base_params)
+            child_params["groupId"] = group_id_value
+            children = await self._get(
+                f"/catalogs/{catalog_id}/groups2/", child_params, lang
+            )
+            for child in self._rows(children):
+                await walk(child, depth + 1)
+
+        for root in selected_roots:
+            await walk(root)
+        return matches
 
     async def lookup(
         self,
@@ -182,50 +344,61 @@ class TradesoftPartsCatalogsAdapter:
             params = dict(base_params)
             params["groupId"] = group_id
             parts = await self._get(f"/catalogs/{catalog_id}/parts2", params, lang)
+            resolved_group_id = group_id
+            selected_schema = None
+            if not self._parts_payload_complete(parts) and query and query.strip():
+                suggestions, schemas_payload, schema_rows = await self._search_schemas(
+                    catalog_id, car_id, query, lang
+                )
+                selected_schema = next(
+                    (row for row in schema_rows if str(self._schema_group_id(row)) == str(group_id)),
+                    None,
+                )
+                if selected_schema and selected_schema.get("img"):
+                    matching_groups = await self._groups_matching_schema_image(
+                        catalog_id, base_params, selected_schema.get("img"), query, lang
+                    )
+                    for group in matching_groups:
+                        candidate_id = self._schema_group_id(group)
+                        if candidate_id is None:
+                            continue
+                        candidate_params = dict(base_params)
+                        candidate_params["groupId"] = candidate_id
+                        candidate_parts = await self._get(
+                            f"/catalogs/{catalog_id}/parts2", candidate_params, lang
+                        )
+                        if self._parts_payload_complete(candidate_parts):
+                            parts = candidate_parts
+                            resolved_group_id = candidate_id
+                            break
+            if not self._parts_payload_complete(parts):
+                raise TradesoftError(
+                    "schema_group_mapping_failed",
+                    "TradeSoft returned the original schema image but no matching parts2 group with positions and OE parts. The selection was stopped rather than guessing.",
+                )
             return {
                 "vehicle": car,
                 "catalogId": catalog_id,
                 "carId": car_id,
                 "criteria": criteria,
                 "parts": parts,
+                "selectedSchema": selected_schema,
+                "resolvedGroupId": resolved_group_id,
             }
 
         if not query or not query.strip():
             raise TradesoftError("missing_query", "A part name is required for OEM catalogue search.")
-        # TradeSoft's documented name-search flow is two requests:
-        # groups-suggest(q) -> sid, then schemas(carId, partNameIds, partName).
-        # groups-by-sid is deprecated and must not be used.
         part_query = query.strip()
-        suggestions_payload = await self._get(
-            f"/catalogs/{catalog_id}/groups-suggest",
-            {"q": part_query},
-            lang,
+        suggestions, schemas, schema_rows = await self._search_schemas(
+            catalog_id, car_id, part_query, lang
         )
-        suggestions = self._rows(suggestions_payload)
-
-        suggestion_ids: list[str] = []
-        normalized_suggestions: list[dict[str, Any]] = []
-        for suggestion in suggestions:
-            sid = suggestion.get("sid", suggestion.get("id"))
-            name = suggestion.get("name") or suggestion.get("title") or part_query
-            if sid is None or not str(sid).strip():
-                continue
-            sid_text = str(sid).strip()
-            if sid_text not in suggestion_ids:
-                suggestion_ids.append(sid_text)
-            normalized_suggestions.append({"sid": sid_text, "name": str(name)})
-
-        schema_params: dict[str, Any] = {"carId": car_id, "partName": part_query}
-        if suggestion_ids:
-            schema_params["partNameIds"] = ",".join(suggestion_ids)
-        schemas = await self._get(f"/catalogs/{catalog_id}/schemas", schema_params, lang)
         return {
             "vehicle": car,
             "catalogId": catalog_id,
             "carId": car_id,
             "criteria": criteria,
             "query": part_query,
-            "suggestions": normalized_suggestions,
+            "suggestions": suggestions,
             "schemas": schemas,
-            "note": "Select a returned schema, then call parts2 with its groupId to retrieve OE part numbers and diagram callouts.",
+            "note": "Select the matching original TradeSoft diagram. Its schema image is mapped to the VIN-specific groups2 leaf before parts2 is requested.",
         }
