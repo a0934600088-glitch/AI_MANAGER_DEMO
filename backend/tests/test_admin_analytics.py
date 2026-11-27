@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -37,7 +38,7 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         payload = main.AnalyticsEventRequest(event_type="selection_success")
         with patch("app.main.analytics.record_event") as record:
             with self.assertRaises(HTTPException) as error:
-                asyncio.run(main.analytics_event(payload))
+                asyncio.run(main.analytics_event(payload, SimpleNamespace(state=SimpleNamespace(tenant_id="default"))))
         self.assertEqual(error.exception.status_code, 422)
         record.assert_not_called()
 
@@ -59,10 +60,11 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         payload = main.AnalyticsEventRequest(event_type="chat_message", conversation_id="session-test",
                                              metadata={"length": 22, "language": "uk"})
         with patch("app.main.analytics.record_event") as record:
-            result = asyncio.run(main.analytics_event(payload))
+            result = asyncio.run(main.analytics_event(payload, SimpleNamespace(state=SimpleNamespace(tenant_id="tenant-77"))))
         self.assertEqual(result, {"status": "recorded"})
         record.assert_called_once()
         args = record.call_args.kwargs
+        self.assertEqual(args["tenant_id"], "tenant-77")
         self.assertEqual(args["conversation_id"], "session-test")
         self.assertEqual(args["metadata"], {"length": 22, "language": "uk"})
 
@@ -126,7 +128,7 @@ class AdminAnalyticsContractTests(unittest.TestCase):
         self.assertEqual(create_error.exception.status_code, 403)
 
     def test_shop_admin_cannot_create_platform_tenants(self):
-        payload = main.TenantCreateRequest(name="Other shop", slug="other-shop")
+        payload = main.TenantCreateRequest(name="Other shop", slug="other-shop", domains=["other.example.com"])
         with self.assertRaises(HTTPException) as error:
             asyncio.run(main.admin_create_tenant(payload, {"role": "shop_admin", "tenant_id": 42}))
         self.assertEqual(error.exception.status_code, 403)
