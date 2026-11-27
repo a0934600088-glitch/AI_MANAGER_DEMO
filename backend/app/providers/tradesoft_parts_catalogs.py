@@ -727,10 +727,13 @@ class TradesoftPartsCatalogsAdapter:
             paths = schema_paths.get(image_key, [])
             if paths:
                 schema["catalogPath"] = paths[0] if len(paths) == 1 else paths
-            axle = self._schema_axle(schema, paths)
-            if axle:
-                schema["axle"] = axle
+            # Axle labels are meaningful for brake-system selection only.
+            # A path containing "front"/"rear" must never classify an engine,
+            # transmission or other component as a front/rear brake candidate.
             if brake_query:
+                axle = self._schema_axle(schema, paths)
+                if axle:
+                    schema["axle"] = axle
                 brake_category = self._schema_brake_category(schema, paths)
                 if brake_category:
                     schema["catalogCategory"], schema["catalogCategoryLabel"] = brake_category
