@@ -19,6 +19,8 @@ main{width:100%;max-width:1000px;margin:0 auto;padding:4px 12px 0;flex:1;min-hei
 <script src="./automotive-language.js"></script><script src="./ui-language.js"></script>
 <script>
 const API='https://ai-manager-api-production.up.railway.app',$=id=>document.getElementById(id);
+const TENANT_KEY=window.AI_MANAGER_TENANT_KEY||new URLSearchParams(location.search).get('tenant_key')||'';
+const tenantHeaders=()=>TENANT_KEY?{'X-Tenant-Key':TENANT_KEY}:{};
 const conversationId=sessionStorage.getItem('ai_conversation_id')||((crypto.randomUUID&&crypto.randomUUID())||('conv-'+Date.now()+'-'+Math.random().toString(16).slice(2)));
 sessionStorage.setItem('ai_conversation_id',conversationId);
 function trackEvent(event_type,metadata={}){fetch(API+'/api/analytics/events',{method:'POST',headers:{'Content-Type':'application/json','X-Conversation-ID':conversationId,...tenantHeaders()},body:JSON.stringify({event_type,conversation_id:conversationId,metadata})}).catch(()=>{});}
