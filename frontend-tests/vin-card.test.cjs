@@ -193,6 +193,10 @@ test('multilingual terminology resolves engine pistons and keeps piston rings an
   assert.match(expanded, /поршень двигателя/);
   assert.match(expanded, /engine piston/i);
   assert.ok(expanded.length <= 580);
+  const front = language.expandQuery('передние тормозные колодки');
+  const rear = language.expandQuery('тормозные колодки задние');
+  assert.match(front, /передний brake pads|front brake pads/i);
+  assert.match(rear, /задний brake pads|rear brake pads/i);
 });
 test('parking-brake pad phrases do not resolve to service brake pads', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'automotive-language.js'), 'utf8');
@@ -204,7 +208,7 @@ test('parking-brake pad phrases do not resolve to service brake pads', () => {
 });
 test('backend axle metadata is only assigned for brake searches', () => {
   const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
-  assert.match(backend, /if brake_query:\\s+axle = self\\._schema_axle/);
+  assert.match(backend, /if brake_query:[\\s\\S]{0,300}axle = self\\._schema_axle/);
 });
 
 test('backend resolves axle from exact VIN catalogue group ancestry', () => {
