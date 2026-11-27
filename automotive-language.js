@@ -79,12 +79,12 @@
     if(!original)return '';
     const found=matchTerms(original), aliases=[];
     const source=norm(original);
-    const axle=/(^|\\s)(задн\\w*|rear|back)(\\s|$)/i.test(source)?{ru:'задний',uk:'задній',en:'rear'}:
-      (/(^|\\s)(передн\\w*|front)(\\s|$)/i.test(source)?{ru:'передний',uk:'передній',en:'front'}:null);
+    const axle=/(^|\s)(задн\w*|rear|back)(\s|$)/i.test(source)?{ru:'задний',uk:'задній',en:'rear'}:
+      (/(^|\s)(передн\w*|front)(\s|$)/i.test(source)?{ru:'передний',uk:'передній',en:'front'}:null);
     const brakeContext=/(тормоз|гальм|brake|суппорт|супорт)/i.test(source);
     found.forEach(row=>{
       if(row.id==='engine_piston'&&brakeContext)return;
-      ['ru','uk','en'].forEach(lang=>(row[lang]||[]).forEach(alias=>{
+      ['ru','uk','en'].forEach(lang=>(row[lang]||[]).slice(0,2).forEach(alias=>{
         if(norm(alias)===source)return;
         const variant=axle&&!/(передн|задн|front|rear|back)/i.test(alias)?axle[lang]+' '+alias:alias;
         if(!aliases.some(item=>norm(item)===norm(variant)))aliases.push(variant);
@@ -96,5 +96,5 @@
     return output;
   }
   function termIds(text){return matchTerms(text).map(x=>x.id)}
-  global.AIManagerLanguage=Object.freeze({version:'1.0.0',matchTerms,expandQuery,termIds,glossary:rows});
+  global.AIManagerLanguage=Object.freeze({version:'1.1.0',matchTerms,expandQuery,termIds,glossary:rows});
 })(window);
