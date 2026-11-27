@@ -10,7 +10,7 @@
     {id:'ball_joint',ru:['шаровая','шаровая опора'],uk:['кульова','кульова опора'],en:['ball joint']},
     {id:'wheel_bearing',ru:['ступичный подшипник','подшипник ступицы'],uk:['підшипник маточини','ступичний підшипник'],en:['wheel bearing','hub bearing']},
     {id:'brake_caliper',ru:['суппорт','тормозной суппорт'],uk:['супорт','гальмівний супорт'],en:['brake caliper']},
-    {id:'brake_pad',ru:['тормозные колодки','колодки тормозные','тормозная колодка','передние тормозные колодки'],uk:['гальмівні колодки','гальмівна колодка','передні гальмівні колодки'],en:['brake pads','brake pad','front brake pads']},
+    {id:'brake_pad',ru:['тормозные колодки','колодки тормозные','тормозная колодка','передние тормозные колодки','задние тормозные колодки','тормозные колодки передние','тормозные колодки задние','колодки'],uk:['гальмівні колодки','гальмівна колодка','передні гальмівні колодки','задні гальмівні колодки','гальмівні колодки передні','гальмівні колодки задні'],en:['brake pads','brake pad','front brake pads','rear brake pads','brake pads front','brake pads rear']},
     {id:'brake_disc',ru:['тормозной диск','диск тормозной','тормозные диски','диски тормозные'],uk:['гальмівний диск','гальмівні диски'],en:['brake disc','brake rotor','brake discs','brake rotors']},
     {id:'cv_joint_outer',ru:['наружный шрус','наружная граната','граната наружная'],uk:['зовнішній шрус','зовнішній шарнір'],en:['outer cv joint','outer cv axle joint']},
     {id:'cv_joint_inner',ru:['внутренний шрус','внутренняя граната'],uk:['внутрішній шрус','внутрішній шарнір'],en:['inner cv joint']},
@@ -69,7 +69,11 @@
   rows.forEach(row=>['ru','uk','en'].forEach(lang=>(row[lang]||[]).forEach(alias=>index.push({id:row.id,lang,alias,norm:norm(alias)}))));
   function matchTerms(text){
     const source=norm(text), found=new Map();
+    const parkingContext=/(ручник|стояночн|стоянков|handbrake|parking brake)/i.test(source);
+    const brakeContext=/(тормоз|гальм|brake|суппорт|супорт)/i.test(source);
     for(const item of index){
+      if(item.id==='engine_piston'&&brakeContext)continue;
+      if(item.id==='brake_pad'&&parkingContext)continue;
       if((' '+source+' ').includes(' '+item.norm+' ')&&!found.has(item.id))found.set(item.id,rows.find(r=>r.id===item.id));
     }
     return [...found.values()];
