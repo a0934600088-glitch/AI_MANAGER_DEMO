@@ -52,6 +52,16 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
                     "title": "Golf",
                 }]
             },
+            f"{provider.BASE_URL}/catalogs/11/cars2/22": {
+                "name": "Golf 1.6 TDI",
+                "brand": "VOLKSWAGEN",
+                "parameters": [
+                    {"name": "Production year", "value": "2018"},
+                    {"name": "Engine code", "value": "DDYA"},
+                    {"name": "Engine displacement", "value": "1598 cc"},
+                    {"name": "Fuel type", "value": "Diesel"},
+                ],
+            },
             f"{provider.BASE_URL}/catalogs/11/groups2/": {
                 "items": [{"groupId": 33, "name": "Front suspension"}]
             },
@@ -85,7 +95,11 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0]["criteria"], "C1")
         self.assertEqual(result[0]["vin"], "WVWZZZAUZJP594600")
         self.assertEqual(cached, result)
-        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(self.requests[1]["url"], f"{provider.BASE_URL}/catalogs/11/cars2/22")
+        self.assertEqual(self.requests[1]["params"], {"criteria": "C1"})
+        self.assertEqual(result[0]["vehicle_details_status"], "success")
+        self.assertEqual(result[0]["parameters"][0]["value"], "2018")
         self.assertEqual(self.requests[0]["headers"]["Authorization"], "unit-test-api-key")
         self.assertEqual(self.requests[0]["headers"]["Accept-Language"], "ru")
 
@@ -137,7 +151,7 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         ])
         self.assertEqual(result["schemas"]["list"][0]["groupId"], 44)
         self.assertEqual(
-            [request["url"] for request in self.requests[1:]],
+            [request["url"] for request in self.requests[2:]],
             [
                 f"{provider.BASE_URL}/catalogs/11/groups-suggest",
                 f"{provider.BASE_URL}/catalogs/11/schemas",
