@@ -158,7 +158,7 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         self.assertEqual(self.requests[2]["params"], {"q": "Brake pads"})
-        self.assertEqual(self.requests[2]["params"], {
+        self.assertEqual(self.requests[3]["params"], {
             "carId": 22,
             "partName": "Brake pads",
             "partNameIds": "87,88",
