@@ -134,3 +134,11 @@ test('TradeSoft diagram supports zoom and callout-to-OE selection', () => {
   assert.match(html, /position\.number\?\?position\.positionNumber/);
   assert.match(html, /оригинальный номер/);
 });
+
+test('Mercedes TradeSoft description is split into separate customer card rows', () => {
+  const start=html.indexOf('function collectFields('), end=html.indexOf('\\nfunction showVehicle(',start), context={};
+  vm.runInNewContext(html.slice(start,end)+'\\nglobalThis.__collect=collectFields;',context);
+  const fields=context.__collect({brand:'Mercedes',modelName:'C-class',title:'205.349 (C 300 4MATIC)',description:'C COUPE. . Regions: Europe, North America, Japan, 7-SPEED AUTOMATIC TRANSMISSION W7X700 (722969 06 680783, 722.969), R4 GASOLINE ENGINE M274 E20 (274920 30 609221, 274.920, M274 E20)',parameters:[{name:'Year',value:'2016'}]});
+  assert.equal(fields['Регион'],'Europe, North America, Japan');assert.equal(fields['Тип кузова'],'C COUPE');assert.equal(fields['Трансмиссия'],'7-SPEED AUTOMATIC TRANSMISSION');assert.equal(fields['Код КПП'],'722.969');assert.equal(fields['Тип топлива'],'Бензин');assert.equal(fields['Цилиндры'],'4');assert.ok(fields['Код двигателя'].includes('M274 E20'));
+});
+test('VIN card uses grouped responsive vehicle sections',()=>{assert.match(html,/vehicle-sections/);assert.match(html,/Идентификация/);assert.match(html,/Кузов и регион/);});
