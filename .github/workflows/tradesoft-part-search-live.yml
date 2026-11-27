@@ -81,7 +81,7 @@ jobs:
                 for (const child of rows(childResult.groups)) await walk(child, depth+1);
               }
               await walk(targetRoot);
-              const normalizeImage = value => String(value || '').replace(/^\\/\\//,'https://').replace(/^http:\\/\\//,'https://');
+              const normalizeImage = value => { const text = String(value || ''); return (text.startsWith('//') ? 'https:' + text : text).replace(/^http:/, 'https:'); };
               const targetImage = normalizeImage(schema.img);
               const matchingLeaves = leaves.filter(group => normalizeImage(group.img) === targetImage);
               console.log('groups2 matched image=' + matchingLeaves.length + ' leaves=' +
