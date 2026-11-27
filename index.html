@@ -277,45 +277,65 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
  let schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);
  if(!schemas.length){add('TradeSoft не нашёл оригинальную схему по этому названию детали. Выдуманный узел не подставляется. Уточните название детали или передайте запрос менеджеру.','bot','system');return}
  const groupOf=s=>catalogValue(s,['groupId','group_id','groupID','id','Id']);
- const uniqueByDiagram=rows=>{
-  const seen=new Set();return rows.filter(schema=>{
-   const key=groupOf(schema)||catalogValue(schema,['img','image','imageUrl','image_url']);
-   if(!key||seen.has(key))return false;seen.add(key);return true;
-  });
- };
+ const imageOf=s=>catalogValue(s,['img','image','imageUrl','image_url','url']);
  const brakeQuery=/тормоз|колод|гальм|brake|pad|lining|drum|handbrake|parking/i.test(String(query||''));
  if(brakeQuery){
-  const labels={
-   front_brake:'Передняя тормозная система — дисковые тормоза и колодки',
-   rear_brake:'Задняя тормозная система — дисковые тормоза и колодки',
-   drum_brake:'Барабанная тормозная система — механизм и колодки',
-   parking_brake:'Колодки стояночного тормоза (ручника)'
-  };
-  const order=['front_brake','rear_brake','drum_brake','parking_brake'];
-  const categorized=schemas.filter(s=>labels[s.catalogCategory]&&groupOf(s));
-  const el=document.createElement('div');el.className='msg';
-  const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Выберите тормозной узел';el.append(heading);
-  if(!categorized.length){
-   add('TradeSoft вернул схемы, но по их названиям и иерархии каталога нельзя надёжно определить тип тормозного узла. Варианты не будут придуманы. Уточните переднюю/заднюю ось или передайте запрос менеджеру.','bot','system');return;
-  }
-  order.forEach(category=>{
-   const rows=uniqueByDiagram(categorized.filter(s=>s.catalogCategory===category));
-   if(!rows.length)return;
-   const section=document.createElement('div');section.className='vehicle-row';
-   const title=document.createElement('div');title.style.fontWeight='700';title.textContent=labels[category];section.append(title);
-   rows.forEach((schema,index)=>{
-    const id=groupOf(schema);const name=catalogValue(schema,['name','title','description'])||labels[category];
-    const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='width:100%;text-align:left;margin-top:7px';
-    button.textContent=rows.length>1?(name+' — схема '+(index+1)):'Открыть оригинальную схему';
-    button.onclick=()=>lookup('parts',query,id);section.append(button);
+  const categories=[
+   {id:'front_brake',title:'Передняя тормозная система',hint:'Передние тормозные диски и колодки'},
+   {id:'rear_brake',title:'Задняя тормозная система',hint:'Задние тормозные диски и колодки'},
+   {id:'drum_brake',title:'Барабанная тормозная система',hint:'Барабанный механизм и тормозные колодки'},
+   {id:'parking_brake',title:'Стояночный тормоз (ручник)',hint:'Отдельные колодки стояночного тормоза'}
+  ];
+  const uniqueByDiagram=rows=>{
+   const seen=new Set();return rows.filter(s=>{
+    const image=imageOf(s),id=groupOf(s),key=image||id;
+    if(!id||!image||seen.has(key))return false;
+    seen.add(key);return true;
    });
-   el.append(section);
+  };
+  const queryTerms=String(query||'').split('|')[0].toLowerCase().split(/[^a-zа-яіїєґ0-9]+/i).filter(x=>x.length>2);
+  const scoreSchema=s=>{
+   const names=[s.name,s.title,s.description,...(Array.isArray(s.partNames)?s.partNames.map(p=>p?.name||p?.title):[])].filter(Boolean).join(' ').toLowerCase();
+   const path=Array.isArray(s.catalogPath)?s.catalogPath.join(' ').toLowerCase():'';
+   const text=names+' '+path;
+   const termScore=queryTerms.reduce((n,t)=>n+(text.includes(t)?5:0),0);
+   const partNames=Array.isArray(s.partNames)?s.partNames.length:0;
+   return termScore+Math.min(partNames,20)/100;
+  };
+  const cards=categories.map(category=>{
+   const rows=uniqueByDiagram(schemas.filter(s=>s.catalogCategory===category.id));
+   if(!rows.length)return null;
+   // TradeSoft may return several technical subgroups for one brake system.
+   // Keep one customer-facing card and choose the most relevant, most complete original diagram.
+   const selected=rows.map((schema,index)=>({schema,index,score:scoreSchema(schema)}))
+    .sort((a,b)=>b.score-a.score||b.index-a.index)[0].schema;
+   return {category,schema:selected};
+  }).filter(Boolean);
+  if(!cards.length){
+   add('Каталог вернул схемы, но не подтвердил тип тормозного узла. Непроверенные варианты не показываем. Уточните нужную ось или передайте запрос менеджеру.','bot','system');return;
+  }
+  const el=document.createElement('div');el.className='msg';
+  const heading=document.createElement('div');heading.style.cssText='font-weight:700;font-size:16px;margin-bottom:10px';heading.textContent='Выберите нужную тормозную систему';el.append(heading);
+  const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px';
+  cards.forEach(({category,schema})=>{
+   const id=groupOf(schema),image=imageOf(schema);
+   const card=document.createElement('button');card.type='button';card.className='secondary';
+   card.setAttribute('aria-label',category.title);
+   card.style.cssText='display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:8px;padding:10px;border:1px solid var(--border,#d8d8d8);border-radius:12px;background:var(--panel,#fff);color:var(--text,inherit);width:100%;min-width:0;cursor:pointer';
+   const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=category.title;
+   img.loading='lazy';img.style.cssText='display:block;width:100%;height:150px;object-fit:contain;background:#fff;border-radius:8px';
+   const title=document.createElement('span');title.style.cssText='font-weight:700;font-size:14px;line-height:1.35';title.textContent=category.title;
+   const hint=document.createElement('span');hint.style.cssText='font-size:12px;line-height:1.35;opacity:.75';hint.textContent=category.hint;
+   const action=document.createElement('span');action.style.cssText='font-size:13px;font-weight:600;margin-top:2px';action.textContent='Выбрать эту схему →';
+   card.append(img,title,hint,action);
+   card.onclick=()=>lookup('parts',query,id);
+   grid.append(card);
   });
-  $('messages').append(el);scrollEnd();return;
+  el.append(grid);$('messages').append(el);scrollEnd();return;
  }
  const classified=schemas.filter(schema=>schema.axle==='front'||schema.axle==='rear');
  if(classified.length){
-  const byAxle={front:uniqueByDiagram(classified.filter(s=>s.axle==='front')),rear:uniqueByDiagram(classified.filter(s=>s.axle==='rear'))};
+  const byAxle={front:classified.filter(s=>s.axle==='front'),rear:classified.filter(s=>s.axle==='rear')};
   const choose=axle=>{
    const candidates=byAxle[axle];
    if(candidates.length===1)return candidates[0];
@@ -325,8 +345,8 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
     const names=[s.name,s.title,s.description,...(Array.isArray(s.partNames)?s.partNames.map(x=>x?.name):[])].filter(Boolean).join(' ').toLowerCase();
     return q.split(/[^a-zа-яіїєґ0-9]+/i).filter(x=>x.length>2).reduce((n,term)=>n+(names.includes(term)?1:0),0);
    };
-   const ranked=candidates.map(schema=>({schema,score:score(schema)})).sort((a,b)=>b.score-a.score);
-   return ranked[0].score>0&&ranked[0].score>ranked[1].score?ranked[0].schema:null;
+   const ranked=candidates.map((schema,index)=>({schema,index,score:score(schema)})).sort((a,b)=>b.score-a.score||a.index-b.index);
+   return ranked[0].score>0?ranked[0].schema:null;
   };
   const selected=[choose('front'),choose('rear')].filter(Boolean);
   const ambiguous=['front','rear'].filter(axle=>byAxle[axle].length>0&&!choose(axle));
@@ -337,7 +357,7 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
   const el=document.createElement('div');el.className='msg';
   const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Подходящие схемы по передней и задней части';el.append(heading);
   selected.forEach(schema=>{
-   const axle=schema.axle;const id=groupOf(schema);const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
+   const axle=schema.axle;const id=groupOf(schema);const image=imageOf(schema);
    const item=document.createElement('div');item.className='vehicle-row';
    if(image){const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=(brakePads?(axle==='front'?'Передние тормозные колодки':'Задние тормозные колодки'):(axle==='front'?'Передняя часть — ':'Задняя часть — ')+component);img.style.cssText='display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:7px;margin:6px 0';item.append(img)}
    const label=document.createElement('div');label.style.fontWeight='700';label.textContent=brakePads?(axle==='front'?'Передние тормозные колодки':'Задние тормозные колодки'):(axle==='front'?'Передняя часть':'Задняя часть')+(component?' — '+component:'');item.append(label);
