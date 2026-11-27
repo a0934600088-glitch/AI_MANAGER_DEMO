@@ -120,7 +120,7 @@ async def analytics_request_middleware(request, call_next):
     tenant_key = request.headers.get("X-Tenant-Key")
     if tenant_key:
         try:
-            getattr(request.state, "tenant_id", "default") = await asyncio.to_thread(
+            request.state.tenant_id = await asyncio.to_thread(
                 auth.resolve_public_tenant, tenant_key, request.headers.get("Origin")
             )
         except HTTPException as exc:
