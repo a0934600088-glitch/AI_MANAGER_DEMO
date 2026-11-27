@@ -1,4 +1,4 @@
-# AI_MANAGER_DEMO — AI Manager 2.4.29
+# AI_MANAGER_DEMO — AI Manager 2.4.35
 
 Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration. The separate `admin.html` page provides a protected administrator analytics console.
 
@@ -27,3 +27,10 @@ Each shop is provisioned with its own public tenant key and HTTPS domain allowli
 
 ## Run and deploy
 The backend serves the messenger at / and API docs at /docs. Provider and administrator credentials must be stored as Railway service variables and must never be committed to Git or placed in browser code.
+
+## Brake-system catalogue selection (2.4.35)
+- A generic brake-pad request first returns a list of brake-system choices, not an automatically opened diagram.
+- TradeSoft schema labels and the selected VIN catalogue ancestry are used to classify front disc brakes, rear disc brakes, drum brakes and parking-brake shoes separately.
+- Parking-brake classification has precedence over generic drum/rear labels so drum-in-hat handbrake shoes are not merged into rear service-brake shoes.
+- The customer chooses one listed schema; only then does the backend request the corresponding VIN-specific parts2 payload and original diagram. OE numbers and callout positions remain sourced from TradeSoft.
+- Unknown or ambiguous categories are withheld rather than guessed. No CRM stock, price or fitment is fabricated.
