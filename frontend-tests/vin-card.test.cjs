@@ -38,7 +38,7 @@ test('normalized Car2 parameter rows reach the vehicle card as stable attributes
   const start = html.indexOf('function collectFields(');
   const end = html.indexOf('\nfunction showVehicle(', start);
   const context = {};
-  vm.runInNewContext(html.slice(start, end) + '\\nglobalThis.__collectFields = collectFields;', context);
+  vm.runInNewContext(html.slice(start, end) + '\nglobalThis.__collectFields = collectFields;', context);
   const fields = context.__collectFields({
     brand: 'MERCEDES-BENZ',
     title: 'C-CLASS Coupe (C205)',
@@ -128,7 +128,7 @@ test('confirmed customer part request opens groups and carries query to the sele
 
 test('full TradeSoft vehicle response fields are preserved for the expanded VIN card', () => {
   assert.match(html, /function collectFields\(obj,out=\{\},seen=new Set\(\),parent=''/);
-  assert.match(html, /hidden\.has\(normalized\)/);
+  assert.match(html, /technical\.has\(normalized\)/);
   assert.match(html, /Тип двигателя/);
   assert.match(html, /productionYear/);
 });
