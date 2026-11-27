@@ -1,4 +1,4 @@
-# AI Manager Catalog API — v2.4.20
+# AI Manager — v2.4.25
 
 FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
@@ -81,3 +81,17 @@ A successful health check confirms only that the FastAPI process is running. A s
 - `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
 - Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
+
+
+## Tenant authentication foundation (feature branch)
+
+The `feature/tenant-auth-rbac` branch introduces database-backed identities and session endpoints:
+- `POST /api/auth/login` — verifies a configured/bootstrap administrator or a provisioned tenant user and returns an opaque bearer token.
+- `GET /api/auth/me` — returns the authenticated account and role.
+- `POST /api/auth/logout` — revokes the presented session.
+- `POST /api/admin/tenants` — super-admin-only tenant creation.
+- `POST /api/admin/tenants/{tenant_id}/users` — creates shop-admin, manager, or observer accounts, with tenant binding enforced server-side.
+
+On first successful login, the backend creates the initial `super_admin` account from the existing server-only `ADMIN_USERNAME` and `ADMIN_PASSWORD` variables. The password is hashed with scrypt; only a SHA-256 digest of each random session token is stored. Tenant users require passwords of at least 12 characters.
+
+**This remains a staging implementation, not a production-ready release.** The administrator and manager login surfaces now use bearer sessions; analytics and conversation queries are filtered by the authenticated tenant; the administrator UI can create tenants and provision staff accounts. The legacy customer widget still records anonymous analytics into the shared `default` demo scope. Tenant-specific customer event ingestion through per-tenant public keys and domain validation is not implemented yet, so new tenant dashboards will correctly show no customer activity rather than leaking the demo tenant's events. Session rate limiting / lockout, database-backed integration tests for cross-tenant reads and writes, production migration review, and deployment verification remain blockers. Do not use this branch for production accounts or customer data.

@@ -106,7 +106,7 @@ def database_health() -> dict:
         return {"status": "unavailable", "error_type": type(exc).__name__}
 
 
-def record_event(event_type: str, *, conversation_id: str | None = None,
+def record_event(event_type: str, *, tenant_id: str = "default", conversation_id: str | None = None,
                  route: str | None = None, method: str | None = None,
                  status_code: int | None = None, duration_ms: float | None = None,
                  metadata: dict | None = None) -> None:
@@ -118,13 +118,13 @@ def record_event(event_type: str, *, conversation_id: str | None = None,
             INSERT INTO ai_manager_analytics_events
             (tenant_id, conversation_id, event_type, route, method, status_code,
              duration_ms, metadata)
-            VALUES ('default', %s, %s, %s, %s, %s, %s, %s::jsonb)
-        """, (_clean_conversation_id(conversation_id), event_type[:80],
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """, (str(tenant_id), _clean_conversation_id(conversation_id), event_type[:80],
               (route or "")[:160] or None, (method or "")[:12] or None,
               status_code, safe_duration, json.dumps(safe_meta, ensure_ascii=False)))
 
 
-def dashboard_summary(days: int = 30) -> dict:
+def dashboard_summary(days: int = 30, tenant_id: str = "default") -> dict:
     ensure_schema()
     with _connect() as conn:
         totals = conn.execute("""
@@ -147,34 +147,34 @@ def dashboard_summary(days: int = 30) -> dict:
               COALESCE(SUM((metadata->>'tokens_output')::numeric) FILTER (WHERE event_type='ai_usage'),0) AS tokens_output,
               COALESCE(SUM((metadata->>'cost_usd')::numeric) FILTER (WHERE event_type='ai_usage'),0) AS ai_cost_usd
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
-        """, (days,)).fetchone()
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+        """, (tenant_id, days)).fetchone()
         daily = conn.execute("""
             SELECT DATE(occurred_at) AS day, COUNT(*) AS events,
               COUNT(*) FILTER (WHERE event_type IN ('http_request','vin_decode','parts_lookup')) AS requests,
               COUNT(DISTINCT conversation_id) AS conversations
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY DATE(occurred_at) ORDER BY day
-        """, (days,)).fetchall()
+        """, (tenant_id, days)).fetchall()
         catalogs = conn.execute("""
             SELECT COALESCE(metadata->>'provider','backend') AS provider,
               COALESCE(route,'—') AS route, COUNT(*) AS requests,
               COUNT(*) FILTER (WHERE status_code >= 400) AS errors,
               ROUND(AVG(duration_ms)::numeric,1) AS avg_duration_ms
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
               AND event_type='catalog_request'
             GROUP BY 1,2 ORDER BY requests DESC
-        """, (days,)).fetchall()
+        """, (tenant_id, days)).fetchall()
         request_types = conn.execute("""
             SELECT COALESCE(route,'unknown') AS route, COUNT(*) AS requests,
               COUNT(*) FILTER (WHERE status_code >= 400) AS errors
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
               AND event_type IN ('http_request','vin_decode','parts_lookup')
             GROUP BY 1 ORDER BY requests DESC
-        """, (days,)).fetchall()
+        """, (tenant_id, days)).fetchall()
         funnel = conn.execute("""
             SELECT
               COUNT(*) FILTER (WHERE event_type IN ('http_request','vin_decode','parts_lookup')) AS requests,
@@ -183,13 +183,13 @@ def dashboard_summary(days: int = 30) -> dict:
               COUNT(*) FILTER (WHERE event_type='offer_created') AS offers,
               COUNT(*) FILTER (WHERE event_type='order_created') AS orders
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
-        """, (days,)).fetchone()
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+        """, (tenant_id, days)).fetchone()
         recent = conn.execute("""
             SELECT occurred_at, conversation_id, event_type, route, status_code, duration_ms, metadata
-            FROM ai_manager_analytics_events WHERE tenant_id='default'
+            FROM ai_manager_analytics_events WHERE tenant_id=%s
             ORDER BY occurred_at DESC LIMIT 100
-        """).fetchall()
+        """, (tenant_id,)).fetchall()
         coverage = conn.execute("""
             SELECT
               COUNT(*) FILTER (WHERE event_type IN ('selection_success','selection_failed','parts_selection_incomplete')) AS selection_events,
@@ -198,8 +198,8 @@ def dashboard_summary(days: int = 30) -> dict:
               COUNT(*) FILTER (WHERE event_type='ai_response') AS ai_response_events,
               COUNT(*) FILTER (WHERE event_type='selection_completed') AS selection_timing_events
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
-        """, (days,)).fetchone()
+            WHERE tenant_id=%s AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
+        """, (tenant_id, days)).fetchone()
 
     def clean(rows):
         return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()} for row in rows]
@@ -207,11 +207,11 @@ def dashboard_summary(days: int = 30) -> dict:
         "period_days": days, "totals": dict(totals), "daily": clean(daily),
         "catalogs": clean(catalogs), "request_types": clean(request_types),
         "funnel": dict(funnel), "recent_events": clean(recent),
-        "coverage": dict(coverage), "scope": "single demo tenant",
+        "coverage": dict(coverage), "scope": "tenant:" + str(tenant_id),
     }
 
 
-def conversation_summary(days: int = 30) -> list[dict]:
+def conversation_summary(days: int = 30, tenant_id: str = "default") -> list[dict]:
     ensure_schema()
     with _connect() as conn:
         rows = conn.execute("""
@@ -223,8 +223,8 @@ def conversation_summary(days: int = 30) -> list[dict]:
               COUNT(*) FILTER (WHERE event_type='vin_decode') AS vin_decodes,
               COUNT(*) FILTER (WHERE event_type='parts_lookup') AS parts_lookups
             FROM ai_manager_analytics_events
-            WHERE tenant_id='default' AND conversation_id IS NOT NULL
+            WHERE tenant_id=%s AND conversation_id IS NOT NULL
               AND occurred_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY conversation_id ORDER BY last_activity_at DESC LIMIT 200
-        """, (days,)).fetchall()
+        """, (tenant_id, days)).fetchall()
     return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()} for row in rows]
