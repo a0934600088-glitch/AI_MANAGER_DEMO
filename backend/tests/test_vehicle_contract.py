@@ -20,6 +20,35 @@ class VehicleContractTests(unittest.TestCase):
         self.assertEqual(vehicle["catalogId"], 12)
         self.assertEqual(vehicle["carId"], 34)
 
+    def test_trade_soft_parameter_rows_are_normalized_for_customer_card(self):
+        vehicle = main._normalize_tradesoft_vehicle({
+            "brand": "MERCEDES-BENZ",
+            "title": "C-CLASS Kyne (C205)",
+            "parameters": [
+                {"name": "Production year", "value": "09.2016 - 12.2018"},
+                {"name": "Engine type", "value": "083"},
+                {"name": "Engine displacement", "value": "1991 cc"},
+                {"name": "Engine code", "value": "M 274.920"},
+                {"name": "Fuel type", "value": "Petrol"},
+                {"name": "Cylinders / valves", "value": "4 / 4"},
+                {"name": "Body type", "value": "Coupe"},
+                {"name": "Fuel system", "value": "Direct injection"},
+                {"name": "Drive type", "value": "AWD"},
+                {"name": "TecDoc identifier", "value": "122128"},
+            ],
+        })
+        self.assertEqual(vehicle["vehicle_attributes"]["modelYear"], "09.2016 - 12.2018")
+        self.assertEqual(vehicle["vehicle_attributes"]["engineType"], "083")
+        self.assertEqual(vehicle["vehicle_attributes"]["engineDisplacement"], "1991 cc")
+        self.assertEqual(vehicle["vehicle_attributes"]["engineCode"], "M 274.920")
+        self.assertEqual(vehicle["vehicle_attributes"]["fuelType"], "Petrol")
+        self.assertEqual(vehicle["vehicle_attributes"]["cylindersValves"], "4 / 4")
+        self.assertEqual(vehicle["vehicle_attributes"]["bodyType"], "Coupe")
+        self.assertEqual(vehicle["vehicle_attributes"]["fuelSystem"], "Direct injection")
+        self.assertEqual(vehicle["vehicle_attributes"]["driveType"], "AWD")
+        self.assertEqual(vehicle["vehicle_attributes"]["tecdocId"], "122128")
+        self.assertEqual(vehicle["catalogId"] if "catalogId" in vehicle else None, None)
+
     def test_identity_alone_is_not_marked_as_complete_vehicle_data(self):
         result = main._vehicle_completeness({
             "brand": "VOLKSWAGEN",
