@@ -556,27 +556,81 @@ class TradesoftPartsCatalogsAdapter:
                         catalog_id, base_params, selected_schema.get("img"), query, lang
                     )
                     mapped = False
+                    candidate_diagnostics: list[dict[str, Any]] = []
                     for group in matching_groups:
                         candidate_id = self._schema_group_id(group)
                         if candidate_id is None:
                             continue
                         candidate_params = dict(base_params)
                         candidate_params["groupId"] = candidate_id
-                        candidate_parts = await self._get(
-                            f"/catalogs/{catalog_id}/parts2", candidate_params, lang
+                        try:
+                            candidate_parts = await self._get(
+                                f"/catalogs/{catalog_id}/parts2", candidate_params, lang
+                            )
+                        except TradesoftError as exc:
+                            candidate_diagnostics.append({
+                                "groupId": str(candidate_id),
+                                "status": "provider_error",
+                                "code": exc.code,
+                            })
+                            # One stale/unavailable group must not prevent checking
+                            # the other groups that share this exact original image.
+                            continue
+
+                        candidate_groups = (
+                            candidate_parts.get("partGroups")
+                            or candidate_parts.get("part_groups")
+                            or []
+                        ) if isinstance(candidate_parts, dict) else []
+                        candidate_parts_rows = (
+                            candidate_parts.get("parts")
+                            if isinstance(candidate_parts, dict)
+                            and isinstance(candidate_parts.get("parts"), list)
+                            else []
                         )
-                        if (
-                            self._parts_payload_complete(candidate_parts)
-                            and self._image_key(candidate_parts.get("img")) == expected_image
-                        ):
+                        if not candidate_parts_rows and isinstance(candidate_groups, list):
+                            candidate_parts_rows = [
+                                part
+                                for item in candidate_groups if isinstance(item, dict)
+                                for part in (item.get("parts") or [])
+                                if isinstance(part, dict)
+                            ]
+                        candidate_positions = (
+                            candidate_parts.get("positions") or []
+                            if isinstance(candidate_parts, dict) else []
+                        )
+                        candidate_image = self._image_key(
+                            candidate_parts.get("img") if isinstance(candidate_parts, dict) else None
+                        )
+                        complete = self._parts_payload_complete(candidate_parts)
+                        same_image = candidate_image == expected_image
+                        candidate_diagnostics.append({
+                            "groupId": str(candidate_id),
+                            "name": str(group.get("name") or group.get("title") or "")[:80],
+                            "complete": complete,
+                            "sameImage": same_image,
+                            "image": candidate_image[-120:],
+                            "parts": len(candidate_parts_rows),
+                            "positions": len(candidate_positions) if isinstance(candidate_positions, list) else 0,
+                        })
+                        if complete and same_image:
                             parts = candidate_parts
                             resolved_group_id = candidate_id
                             mapped = True
                             break
                     if not mapped:
+                        logger.warning(
+                            "TradeSoft parts2 schema mapping rejected: expected_image=%s matching_groups=%s candidates=%s",
+                            expected_image[-120:],
+                            len(matching_groups),
+                            candidate_diagnostics[:12],
+                        )
                         raise TradesoftError(
                             "schema_group_mapping_failed",
-                            "TradeSoft returned a parts2 diagram that does not match the selected original schema image, and no matching VIN-specific group with positions and OE parts was found. The selection was stopped rather than guessing.",
+                            "TradeSoft returned no complete parts2 response matching the selected original schema image. "
+                            f"VIN-specific groups checked: {len(matching_groups)}; "
+                            f"candidate diagnostics: {candidate_diagnostics[:8]}. "
+                            "The selection was stopped rather than guessing.",
                         )
             elif not self._parts_payload_complete(parts):
                 raise TradesoftError(
