@@ -120,3 +120,20 @@ def create_user(tenant_id: int, username: str, display_name: str, password: str,
             VALUES (%s,%s,%s,%s,%s) RETURNING id,tenant_id,username,display_name,role,is_active""",
             (tenant_id, username.strip(), display_name.strip(), _password_hash(password), role)).fetchone()
     return dict(row)
+
+
+def list_tenants() -> list[dict[str, Any]]:
+    ensure_schema()
+    with analytics._connect() as conn:
+        rows = conn.execute("SELECT id, name, slug, status, created_at FROM ai_manager_tenants ORDER BY name").fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_users(tenant_id: int) -> list[dict[str, Any]]:
+    ensure_schema()
+    with analytics._connect() as conn:
+        rows = conn.execute("""
+            SELECT id, tenant_id, username, display_name, role, is_active, created_at
+            FROM ai_manager_users WHERE tenant_id=%s ORDER BY display_name, username
+        """, (tenant_id,)).fetchall()
+    return [dict(row) for row in rows]
