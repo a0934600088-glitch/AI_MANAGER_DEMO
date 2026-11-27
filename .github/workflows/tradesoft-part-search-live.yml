@@ -64,40 +64,51 @@ jobs:
               const envelopeGroup = result.schemas?.group || {};
               const treeResult = await post({vin, mode:'groups', lang:'ru'}, query + ' root groups');
               const rootGroups = rows(treeResult.groups);
-              console.log('groups2 root sample=' + JSON.stringify(rootGroups.slice(0,8).map(group => ({
-                id:group.groupId ?? group.group_id ?? group.id,
-                name:group.name,
-                hasParts:group.hasParts,
-                hasSubgroups:group.hasSubgroups,
-                img:group.img
-              }))).slice(0,7000));
-              const candidates = [
-                schema.groupId, schema.group_id, schema.groupID, schema.group?.id, schema.id,
-                envelopeGroup.groupId, envelopeGroup.group_id, envelopeGroup.id
-              ].filter((value, index, all) => value !== undefined && value !== null && String(value).trim() && all.findIndex(x => String(x) === String(value)) === index);
+              const targetRoot = rootGroups.find(group => {
+                const name = String(group.name || '').toLowerCase();
+                return /колод|тормоз|brake|диск|амортиз|подвес|shock|strut/.test(name);
+              });
+              if (!targetRoot) throw new Error(query + ': no matching top-level groups2 category');
+              const leaves = [];
+              async function walk(group, depth=0) {
+                if (depth > 8 || leaves.length > 500) return;
+                const id = group.groupId ?? group.group_id ?? group.id;
+                const hasParts = group.hasParts === true || group.hasParts === 1 || String(group.hasParts).toLowerCase() === 'true';
+                const hasSubgroups = group.hasSubgroups === true || group.hasSubgroups === 1 || String(group.hasSubgroups).toLowerCase() === 'true';
+                if (hasParts && id != null) leaves.push(group);
+                if (!hasSubgroups || id == null) return;
+                const childResult = await post({vin, mode:'groups', group_id:id, lang:'ru'}, query + ' nested groups');
+                for (const child of rows(childResult.groups)) await walk(child, depth+1);
+              }
+              await walk(targetRoot);
+              const normalizeImage = value => { const text = String(value || ''); return (text.startsWith('//') ? 'https:' + text : text).replace(/^http:/, 'https:'); };
+              const targetImage = normalizeImage(schema.img);
+              const matchingLeaves = leaves.filter(group => normalizeImage(group.img) === targetImage);
+              console.log('groups2 matched image=' + matchingLeaves.length + ' leaves=' +
+                JSON.stringify(leaves.slice(0,20).map(group => ({
+                  id:group.groupId ?? group.group_id ?? group.id,
+                  name:group.name,
+                  img:group.img
+                }))).slice(0,7000));
               let payload = null, parts = [], positions = [], groupId = null;
-              for (const candidate of candidates) {
-                try {
-                  const partsResult = await post({vin, mode:'parts', group_id:candidate, lang:'ru'}, query + ' parts2');
-                  const candidatePayload = partsResult.parts || partsResult;
-                  const partGroups = rows(candidatePayload.partGroups || candidatePayload.part_groups);
-                  const candidateParts = partGroups.flatMap(group => rows(group.parts));
-                  const candidatePositions = rows(candidatePayload.positions);
-                  console.log('parts2 candidate=' + String(candidate) + ' keys=' + Object.keys(candidatePayload).join(',') +
-                    ' partGroups=' + partGroups.length + ' positions=' + candidatePositions.length +
-                    ' image=' + Boolean(candidatePayload.img));
-                  if (candidatePayload.img && candidatePositions.length && candidateParts.length) {
-                    payload = candidatePayload; parts = candidateParts; positions = candidatePositions; groupId = candidate; break;
-                  }
-                } catch (error) {
-                  console.log('parts2 candidate=' + String(candidate) + ' rejected=' + error.message.slice(0,300));
+              for (const leaf of matchingLeaves) {
+                const id = leaf.groupId ?? leaf.group_id ?? leaf.id;
+                const partsResult = await post({vin, mode:'parts', group_id:id, lang:'ru'}, query + ' matched parts2');
+                const candidatePayload = partsResult.parts || partsResult;
+                const partGroups = rows(candidatePayload.partGroups || candidatePayload.part_groups);
+                const candidateParts = partGroups.flatMap(group => rows(group.parts));
+                const candidatePositions = rows(candidatePayload.positions);
+                if (candidatePayload.img && candidatePositions.length && candidateParts.length) {
+                  payload = candidatePayload; parts = candidateParts; positions = candidatePositions; groupId = id; break;
                 }
               }
               if (!payload) {
-                console.error('TradeSoft schemas envelope diagnostic: ' + JSON.stringify({
-                  query, envelopeGroup, schema, schemaKeys:Object.keys(schema), candidates
+                console.error('TradeSoft schema/group mapping: ' + JSON.stringify({
+                  query, schemaName:schema.name, schemaImage:schema.img,
+                  targetRoot:targetRoot.name, leafCount:leaves.length,
+                  imageMatches:matchingLeaves.length
                 }).slice(0,7000));
-                throw new Error(query + ': no candidate schema/group ID returned a complete original parts2 diagram');
+                throw new Error(query + ': no matching groups2 leaf produced the original parts2 data');
               }
               const oeCount = parts.filter(part =>
                 ['number','oeNumber','oe_number','oemNumber','oem_number','partNumber','part_number']
