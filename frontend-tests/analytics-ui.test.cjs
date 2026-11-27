@@ -77,3 +77,19 @@ test('admin and shop users use distinct role-checked login choices', () => {
   assert.match(analytics, /def dashboard_summary\(days: int = 30, tenant_id: str = "default"\)/);
   assert.match(analytics, /def conversation_summary\(days: int = 30, tenant_id: str = "default"\)/);
 });
+
+test('customer chat is focused on the conversation and preserves existing controls', () => {
+  assert.doesNotMatch(chat, /class="client-contact"|id="clientPhone"|id="clientCallBtn"|setCustomerPhone/);
+  for (const id of [
+    'uiLanguage', 'opsToggle', 'refreshBtn', 'opsPanel', 'opsAdminUsername',
+    'opsAdminPassword', 'opsAuthBtn', 'opsClose', 'messages', 'attachmentPreview',
+    'voiceMeter', 'voiceMeterCanvas', 'attachBtn', 'input', 'cameraBtn', 'callBtn',
+    'voiceBtn', 'send', 'fileInput', 'cameraInput'
+  ]) {
+    assert.match(chat, new RegExp('id="' + id + '"'), 'missing existing control: ' + id);
+  }
+  assert.match(chat, /assets\/ai-manager-blueprint\.webp/);
+  assert.doesNotMatch(chat, /assets\/blueprint-responsive\.svg/);
+  assert.match(chat, /@media\(max-width:900px\)/);
+  assert.match(chat, /@media\(max-width:600px\)/);
+});
