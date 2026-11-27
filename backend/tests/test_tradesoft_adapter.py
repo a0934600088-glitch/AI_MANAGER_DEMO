@@ -334,6 +334,14 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0]["catalogPath"], ["Front axle", "Disc brakes"])
         self.assertEqual(rows[1]["catalogPath"], ["Rear axle", "Disc brakes"])
 
+        # A second part search for the same VIN reuses the indexed hierarchy.
+        groups2_before = sum("/groups2/" in request["url"] for request in self.requests)
+        await self.adapter.lookup(
+            "WVWZZZAUZJP594600", mode="parts", query="Brake discs", lang="en"
+        )
+        groups2_after = sum("/groups2/" in request["url"] for request in self.requests)
+        self.assertEqual(groups2_after, groups2_before)
+
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
             "data": [
