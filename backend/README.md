@@ -81,3 +81,17 @@ A successful health check confirms only that the FastAPI process is running. A s
 - `CORS_ORIGINS` — comma-separated exact origins. Wildcard entries are ignored; when unset, the backend uses the published GitHub Pages origin, the Railway origin, and local development origins.
 - Diagnostic traces mask VIN values, including VINs embedded in free-text details. Do not add raw customer identifiers to trace messages.
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
+
+
+## Tenant authentication foundation (feature branch)
+
+The `feature/tenant-auth-rbac` branch introduces database-backed identities and session endpoints:
+- `POST /api/auth/login` — verifies a configured/bootstrap administrator or a provisioned tenant user and returns an opaque bearer token.
+- `GET /api/auth/me` — returns the authenticated account and role.
+- `POST /api/auth/logout` — revokes the presented session.
+- `POST /api/admin/tenants` — super-admin-only tenant creation.
+- `POST /api/admin/tenants/{tenant_id}/users` — creates shop-admin, manager, or observer accounts, with tenant binding enforced server-side.
+
+On first successful login, the backend creates the initial `super_admin` account from the existing server-only `ADMIN_USERNAME` and `ADMIN_PASSWORD` variables. The password is hashed with scrypt; only a SHA-256 digest of each random session token is stored. Tenant users require passwords of at least 12 characters.
+
+**This is an implementation stage, not a production-ready release yet.** Existing analytics and conversation APIs still use the legacy demo tenant and have not yet been migrated to authenticated tenant scoping. The frontend login/manager console, tenant-aware customer event ingestion, admin tenant listing, session rate limiting, and end-to-end isolation tests remain required before merge and deployment. Do not create manager accounts for production use until those controls are complete.
