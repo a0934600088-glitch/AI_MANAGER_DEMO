@@ -1,4 +1,4 @@
-# AI Manager — v2.4.26
+# AI Manager — v2.4.27
 
 FastAPI backend for the AI Manager test release. The sole active automotive catalogue provider is TradeSoft OEM Parts.Catalogs. All provider credentials remain server-side.
 
@@ -84,7 +84,7 @@ A successful health check confirms only that the FastAPI process is running. A s
 - The browser's diagnostic panel cannot read protected traces without an authenticated admin client. This is intentional; public customer traffic must not receive operator diagnostics.
 
 
-## Tenant data attribution and public widget identity (v2.4.26 candidate)
+## Tenant data attribution and public widget identity (v2.4.27)
 
 - Every tenant receives a random public widget key; only its SHA-256 digest is stored.
 - Customer widget requests send `X-Tenant-Key`. The API resolves the tenant server-side and verifies that the HTTPS `Origin` host is in that tenant's allowed-domain list.
@@ -102,6 +102,10 @@ A successful health check confirms only that the FastAPI process is running. A s
 - Roles are `super_admin`, `shop_admin`, `manager`, and `observer`.
 - Tenant staff are bound to one tenant in the database. Shop administrators can manage staff only in their own shop and cannot create another shop administrator. Managers and observers cannot manage staff or platform tenants.
 - Analytics and conversation summaries always query using the server-derived tenant scope for shop users. The super administrator's legacy overview remains scoped to the legacy `default` demo data.
+
+## OEM diagram identity safeguard (v2.4.27)
+
+When a part-name search returns a selected original schema, the adapter verifies that the `parts2` diagram image is the same image. If TradeSoft returns a complete but different diagram, the adapter maps the selected schema image to a VIN-specific `groups2` leaf and accepts only a matching complete `parts2` response. If no exact match exists, the lookup fails closed instead of presenting a different diagram.
 
 ## Release limitations
 
