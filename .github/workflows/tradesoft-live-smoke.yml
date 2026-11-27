@@ -1,7 +1,7 @@
 name: TradeSoft live catalogue smoke test
 
 on:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - "index.html"
@@ -82,6 +82,20 @@ jobs:
             return payload;
           }
           (async () => {
+            const mercedesVin = 'WDDWJ4KB7HF339494';
+            const mercedes = await post('/api/catalog/v1/vehicles/decode', { vin: mercedesVin, lang: 'en' }, 'Mercedes detailed VIN decode');
+            if (mercedes.status !== 'success' || mercedes.is_oem_catalog_verified !== true) {
+              throw new Error('Mercedes VIN was not uniquely verified by TradeSoft');
+            }
+            const mercedesCar = mercedes.vehicle || {};
+            console.log('Mercedes Car2 detail status=' + (mercedesCar.vehicle_details_status || 'not_returned'));
+            console.log('Mercedes normalized vehicle fields=' + JSON.stringify(mercedesCar.vehicle_attributes || {}));
+            if (mercedesCar.vehicle_details_status !== 'success') {
+              throw new Error('TradeSoft Car2 detailed vehicle request did not succeed');
+            }
+            if (!mercedesCar.vehicle_attributes || !Object.keys(mercedesCar.vehicle_attributes).length) {
+              throw new Error('TradeSoft Car2 returned no normalized vehicle parameters for the Mercedes VIN');
+            }
             for (const vehicle of vehicles) {
               const decoded = await post('/api/catalog/v1/vehicles/decode', { vin: vehicle.vin, lang: 'en' }, vehicle.label + ' VIN decode');
               console.log(vehicle.label + ': VIN decoded by live provider');
