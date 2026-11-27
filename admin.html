@@ -107,7 +107,7 @@ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();const u=$(
  super_admin:[],
  shop_admin:[],
  manager:['crm','sales','ai','integrations','tenants'],
- observer:['crm','sales','ai','integrations','tenants']
+ observer:['vehicles','parts','crm','sales','ai','integrations','tenants']
 };
 document.querySelectorAll('#nav button').forEach(b=>{b.hidden=(hiddenByRole[role]||hiddenByRole.observer).includes(b.dataset.view)});
 $('tenantNav').hidden=!['super_admin','shop_admin'].includes(role);
