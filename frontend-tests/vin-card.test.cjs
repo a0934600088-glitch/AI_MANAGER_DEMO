@@ -168,14 +168,14 @@ test('VIN card uses grouped responsive vehicle sections',()=>{assert.match(html,
 
 test('non-brake multi-schema results are not forced into front/rear classification', () => {
   const start = html.indexOf('function renderCatalogSchemas(');
-  const end = html.indexOf('\\n\\nasync function lookup(', start);
+  const end = html.indexOf('\n\nasync function lookup(', start);
   assert.notEqual(start, -1);
   const renderer = html.slice(start, end);
-  assert.doesNotMatch(renderer, /const classified=schemas\\.filter\\(schema=>schema\\.axle/);
+  assert.doesNotMatch(renderer, /const classified=schemas\.filter\(schema=>schema\.axle/);
   assert.match(renderer, /деталей двигателя и других систем/);
-  assert.match(renderer, /schemas\\.forEach\\(\\(schema,index\\)=>/);
-  assert.match(renderer, /schema\\.catalogPath/);
-  assert.match(renderer, /card\\.onclick=\\(\\)=>lookup\\('parts',query,id\\)/);
+  assert.match(renderer, /schemas\.forEach\(\(schema,index\)=>/);
+  assert.match(renderer, /schema\.catalogPath/);
+  assert.match(renderer, /card\.onclick=\(\)=>lookup\('parts',query,id\)/);
   assert.match(renderer, /Найдено несколько узлов в каталоге этого автомобиля/);
 });
 test('multilingual terminology resolves engine pistons and keeps piston rings and brake pistons distinct', () => {
@@ -208,7 +208,7 @@ test('parking-brake pad phrases do not resolve to service brake pads', () => {
 });
 test('backend axle metadata is only assigned for brake searches', () => {
   const backend = fs.readFileSync('backend/app/providers/tradesoft_parts_catalogs.py', 'utf8');
-  assert.match(backend, /if brake_query:[\\s\\S]{0,300}axle = self\\._schema_axle/);
+  assert.match(backend, /if brake_query:[\s\S]{0,300}axle = self\._schema_axle/);
 });
 
 test('backend resolves axle from exact VIN catalogue group ancestry', () => {
