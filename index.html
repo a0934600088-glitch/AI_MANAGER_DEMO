@@ -242,9 +242,25 @@ function renderCatalogParts(result){
 }
 function elAppendImage(parent,child){parent.append(child)}
 function renderCatalogSchemas(result,query=pendingPartQuery){
- const schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);
+ let schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);
  if(!schemas.length){add('TradeSoft не нашёл оригинальную схему по этому названию детали. Выдуманный узел не подставляется. Уточните название детали или передайте запрос менеджеру.','bot','system');return}
  const groupOf=s=>catalogValue(s,['groupId','group_id','groupID','id','Id']);
+ const q=String(query||'').split('|')[0].toLowerCase();
+ const wanted=/колод|brake\s*pad|гальм.*колод/.test(q)?['колод','brake pad','brake lining','pad']:
+  /диск|disc|rotor/.test(q)?['диск','disc','rotor']:
+  /амортиз|shock|damper|strut/.test(q)?['амортиз','shock','damper','strut']:[];
+ if(wanted.length){
+  const scored=schemas.map(schema=>{
+   const names=[schema.name,schema.title,schema.description,...(Array.isArray(schema.partNames)?schema.partNames.map(x=>x?.name):[])].filter(Boolean).join(' ').toLowerCase();
+   return {schema,score:wanted.reduce((sum,term)=>sum+(names.includes(term)?1:0),0)};
+  });
+  const best=Math.max(...scored.map(x=>x.score));
+  if(best>0){
+   const matches=scored.filter(x=>x.score===best).map(x=>x.schema);
+   if(matches.length===1&&groupOf(matches[0])){lookup('parts',query,groupOf(matches[0]));return}
+   schemas=matches;
+  }
+ }
  if(schemas.length===1&&groupOf(schemas[0])){lookup('parts',query,groupOf(schemas[0]));return}
  const el=document.createElement('div');el.className='msg';
  const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Схемы TradeSoft по вашему запросу';el.append(heading);

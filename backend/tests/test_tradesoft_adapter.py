@@ -34,6 +34,8 @@ class FakeAsyncClient:
         payload = self.payloads.get(url)
         if payload is None:
             raise AssertionError(f"Unexpected TradeSoft URL: {url}")
+        if callable(payload):
+            payload = payload(params or {})
         return FakeResponse(payload)
 
 
@@ -62,7 +64,9 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
                 "list": [{"groupId": 44, "name": "Front brake pads"}]
             },
             f"{provider.BASE_URL}/catalogs/11/parts2": {
-                "data": [{"oeNumber": "5Q0407183", "callout": "7"}]
+                "img": "//img.parts-catalogs.com/test/diagram.png",
+                "partGroups": [{"parts": [{"oeNumber": "5Q0407183", "callout": "7"}]}],
+                "positions": [{"number": "7", "x": 0.5, "y": 0.5}],
             },
         }
         self.adapter = provider.TradesoftPartsCatalogsAdapter("unit-test-api-key")
@@ -109,8 +113,9 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
                 group_id=33,
             )
 
-        self.assertEqual(result["parts"]["data"][0]["oeNumber"], "5Q0407183")
-        self.assertEqual(result["parts"]["data"][0]["callout"], "7")
+        self.assertEqual(result["parts"]["partGroups"][0]["parts"][0]["oeNumber"], "5Q0407183")
+        self.assertEqual(result["parts"]["partGroups"][0]["parts"][0]["callout"], "7")
+        self.assertEqual(result["resolvedGroupId"], 33)
         self.assertEqual(
             self.requests[-1]["params"],
             {"carId": 22, "criteria": "C1", "groupId": 33},
@@ -160,6 +165,73 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             "carId": 22,
             "partName": "Front shock absorbers",
         })
+
+    async def test_pipe_delimited_part_terms_are_searched_independently(self):
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600",
+                mode="parts",
+                query="Brake pads | Brake lining",
+                lang="en",
+            )
+
+        suggest_requests = [
+            request for request in self.requests
+            if request["url"].endswith("/groups-suggest")
+        ]
+        schema_requests = [
+            request for request in self.requests
+            if request["url"].endswith("/schemas")
+        ]
+        self.assertEqual([r["params"]["q"] for r in suggest_requests], ["Brake pads", "Brake lining"])
+        self.assertEqual([r["params"]["partName"] for r in schema_requests], ["Brake pads", "Brake lining"])
+        self.assertEqual(len(result["schemas"]["list"]), 1)
+
+    async def test_schema_group_id_is_mapped_to_matching_groups2_leaf_image(self):
+        schema_image = "//img.parts-catalogs.com/test/brake.png"
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
+            "group": {"id": 1, "name": "Brake system"},
+            "list": [{
+                "groupId": "opaque-schema-id",
+                "img": schema_image,
+                "name": "Front brake diagram",
+                "partNames": [{"id": "289", "name": "Brake pads"}],
+            }],
+        }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups2/"] = lambda params: (
+            {"items": [{"groupId": "brake-root", "name": "Brake system", "hasParts": False, "hasSubgroups": True}]}
+            if "groupId" not in params else
+            {"items": [{"groupId": "brake-leaf", "name": "Front brake pads", "hasParts": True,
+                        "hasSubgroups": False, "img": schema_image}]}
+        )
+        def parts_response(params):
+            if params.get("groupId") == "opaque-schema-id":
+                return {"img": schema_image, "partGroups": [], "positions": []}
+            return {
+                "img": schema_image,
+                "partGroups": [{"parts": [{"oeNumber": "5Q0698151", "name": "Brake pad"}]}],
+                "positions": [{"number": "3", "x": 0.5, "y": 0.5}],
+            }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/parts2"] = parts_response
+
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600",
+                mode="parts",
+                query="тормозные колодки | brake pads",
+                lang="ru",
+                group_id="opaque-schema-id",
+            )
+
+        self.assertEqual(result["resolvedGroupId"], "brake-leaf")
+        self.assertEqual(
+            result["parts"]["partGroups"][0]["parts"][0]["oeNumber"],
+            "5Q0698151",
+        )
+        self.assertEqual(
+            self.requests[-1]["params"],
+            {"carId": 22, "criteria": "C1", "groupId": "brake-leaf"},
+        )
 
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
