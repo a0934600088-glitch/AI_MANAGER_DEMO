@@ -604,12 +604,19 @@ class TradesoftPartsCatalogsAdapter:
                         )
                         complete = self._parts_payload_complete(candidate_parts)
                         same_image = candidate_image == expected_image
+                        raw_group_id = str(group.get("groupId") or group.get("group_id") or "")
+                        raw_id = str(group.get("id") or group.get("Id") or "")
                         candidate_diagnostics.append({
-                            "groupId": str(candidate_id),
-                            "name": str(group.get("name") or group.get("title") or "")[:80],
+                            "groupIdLength": len(str(candidate_id)),
+                            "groupIdPrefix": str(candidate_id)[:20],
+                            "id": raw_id[:24],
+                            "groupId": raw_group_id[:24],
+                            "keys": list(group.keys())[:16],
+                            "name": str(group.get("name") or group.get("title") or "")[:48],
                             "complete": complete,
                             "sameImage": same_image,
-                            "image": candidate_image[-120:],
+                            "image": candidate_image[-72:],
+                            "payloadKeys": list(candidate_parts.keys())[:16] if isinstance(candidate_parts, dict) else [],
                             "parts": len(candidate_parts_rows),
                             "positions": len(candidate_positions) if isinstance(candidate_positions, list) else 0,
                         })
@@ -629,7 +636,7 @@ class TradesoftPartsCatalogsAdapter:
                             "schema_group_mapping_failed",
                             "TradeSoft returned no complete parts2 response matching the selected original schema image. "
                             f"VIN-specific groups checked: {len(matching_groups)}; "
-                            f"candidate diagnostics: {candidate_diagnostics[:8]}. "
+                            f"candidate diagnostics: {candidate_diagnostics[:2]}. "
                             "The selection was stopped rather than guessing.",
                         )
             elif not self._parts_payload_complete(parts):
