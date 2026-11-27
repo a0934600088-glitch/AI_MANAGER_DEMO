@@ -213,7 +213,7 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             }],
         }
         self.payloads[f"{provider.BASE_URL}/catalogs/11/groups2/"] = lambda params: (
-            {"items": [{"groupId": "general-root", "name": "General components", "hasParts": False, "hasSubgroups": True}]}
+            {"items": [{"groupId": "general-root", "name": "General components", "hasParts": False}]}
             if "groupId" not in params else
             {"items": [{"groupId": "brake-leaf", "name": "Front brake pads", "hasParts": False,
                         "hasSubgroups": False, "img": schema_image}]}

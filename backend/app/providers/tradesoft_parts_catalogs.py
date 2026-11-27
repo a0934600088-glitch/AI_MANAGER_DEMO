@@ -6,6 +6,7 @@ Credentials are only read from server environment variables.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from typing import Any, Literal
@@ -13,6 +14,7 @@ from typing import Any, Literal
 import httpx
 
 BASE_URL = "https://api.parts-catalogs.com/v1"
+logger = logging.getLogger(__name__)
 
 
 class TradesoftError(Exception):
@@ -311,6 +313,7 @@ class TradesoftPartsCatalogsAdapter:
         matches: list[dict[str, Any]] = []
         visited: set[str] = set()
         visited_count = 0
+        visited_summary: list[dict[str, Any]] = []
 
         async def walk(group: dict[str, Any], depth: int = 0) -> None:
             nonlocal visited_count
@@ -324,10 +327,20 @@ class TradesoftPartsCatalogsAdapter:
                 return
             visited.add(key)
             visited_count += 1
+            if len(visited_summary) < 60:
+                visited_summary.append({
+                    "id": key,
+                    "name": str(group.get("name") or group.get("title") or "")[:80],
+                    "image": self._image_key(group.get("img"))[:180],
+                    "hasSubgroups": group.get("hasSubgroups", group.get("has_subgroups")),
+                })
 
             # hasParts is advisory metadata. The exact schema image plus a
             # complete parts2 response is the authoritative identity check.
-            has_subgroups = self._truthy(group.get("hasSubgroups", group.get("has_subgroups")))
+            subgroup_hint = group.get("hasSubgroups", group.get("has_subgroups"))
+            # A missing hint means unknown, not "no children". Recurse in that
+            # case; stop only when the provider explicitly says false.
+            has_subgroups = subgroup_hint is None or self._truthy(subgroup_hint)
             if self._image_key(group.get("img")) == image_key:
                 matches.append(group)
             if not has_subgroups:
@@ -345,6 +358,14 @@ class TradesoftPartsCatalogsAdapter:
         if not matches:
             for root in fallback_roots:
                 await walk(root)
+        if not matches:
+            logger.warning(
+                "TradeSoft schema image mapping miss: expected_image=%s roots=%s visited=%s nodes=%s",
+                image_key[:180],
+                [self._schema_group_id(root) for root in roots[:30]],
+                visited_count,
+                visited_summary,
+            )
         return matches
 
     async def lookup(
