@@ -1,6 +1,14 @@
-# AI_MANAGER_DEMO — AI Manager 2.4.20
+# AI_MANAGER_DEMO — AI Manager 2.4.22
 
-Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration.
+Live test release: FastAPI serves the customer messenger and exposes the OEM catalogue integration. The separate `admin.html` page provides a protected administrator analytics console.
+
+## Administrator console
+- Open `/admin.html` on the published site.
+- The page uses server-verified HTTP Basic credentials; it does not store the password in browser storage.
+- Configure `ADMIN_USERNAME` and `ADMIN_PASSWORD` as Railway service variables. Do not commit real credentials or send passwords in chat.
+- Legacy fallback remains available when those variables are not set: username `admin` and the existing server-side `ADMIN_API_TOKEN` as password.
+- The console separates overview, client sessions, VIN activity, parts demand, CRM/store analytics, sales, AI performance and integrations.
+- CRM sales metrics remain explicitly unavailable until a real CRM/e-commerce connector sends verified events. No sales figures are fabricated.
 
 ## Catalogue integration
 - **TradeSoft OEM Parts.Catalogs** — the sole OEM source configured by the application for VIN identification, vehicle catalogue lookup, original diagrams, OE numbers and callout positions. It is enabled only when TRADESOFT_ENABLED=true and a valid server-side TRADESOFT_API_TOKEN is present in Railway.
@@ -14,4 +22,4 @@ Live test release: FastAPI serves the customer messenger and exposes the OEM cat
 4. Missing parameters remain missing; the application does not infer engine, power, body or fitment.
 
 ## Run and deploy
-The backend serves the messenger at / and API docs at /docs. Provider credentials must be stored as Railway service variables and must never be committed to Git or placed in browser code.
+The backend serves the messenger at / and API docs at /docs. Provider and administrator credentials must be stored as Railway service variables and must never be committed to Git or placed in browser code.
