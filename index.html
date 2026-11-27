@@ -277,35 +277,49 @@ function renderCatalogSchemas(result,query=pendingPartQuery){
  let schemas=catalogRows(result?.schemas,['items','data','results','schemas','list']);
  if(!schemas.length){add('TradeSoft не нашёл оригинальную схему по этому названию детали. Выдуманный узел не подставляется. Уточните название детали или передайте запрос менеджеру.','bot','system');return}
  const groupOf=s=>catalogValue(s,['groupId','group_id','groupID','id','Id']);
- const q=String(query||'').split('|')[0].toLowerCase();
- const wanted=/колод|brake\s*pad|гальм.*колод/.test(q)?['колод','brake pad','brake lining','pad']:
-  /диск|disc|rotor/.test(q)?['диск','disc','rotor']:
-  /амортиз|shock|damper|strut/.test(q)?['амортиз','shock','damper','strut']:[];
- if(wanted.length){
-  const scored=schemas.map(schema=>{
-   const names=[schema.name,schema.title,schema.description,...(Array.isArray(schema.partNames)?schema.partNames.map(x=>x?.name):[])].filter(Boolean).join(' ').toLowerCase();
-   return {schema,score:wanted.reduce((sum,term)=>sum+(names.includes(term)?1:0),0)};
+ const uniqueByDiagram=rows=>{
+  const seen=new Set();return rows.filter(schema=>{
+   const key=groupOf(schema)||catalogValue(schema,['img','image','imageUrl','image_url']);
+   if(!key||seen.has(key))return false;seen.add(key);return true;
   });
-  const best=Math.max(...scored.map(x=>x.score));
-  if(best>0){
-   const matches=scored.filter(x=>x.score===best).map(x=>x.schema);
-   if(matches.length===1&&groupOf(matches[0])){lookup('parts',query,groupOf(matches[0]));return}
-   schemas=matches;
+ };
+ const classified=schemas.filter(schema=>schema.axle==='front'||schema.axle==='rear');
+ if(classified.length){
+  const byAxle={front:uniqueByDiagram(classified.filter(s=>s.axle==='front')),rear:uniqueByDiagram(classified.filter(s=>s.axle==='rear'))};
+  const choose=axle=>{
+   const candidates=byAxle[axle];
+   if(candidates.length===1)return candidates[0];
+   if(candidates.length<2)return null;
+   const q=String(query||'').split('|')[0].toLowerCase();
+   const score=s=>{
+    const names=[s.name,s.title,s.description,...(Array.isArray(s.partNames)?s.partNames.map(x=>x?.name):[])].filter(Boolean).join(' ').toLowerCase();
+    return q.split(/[^a-zа-яіїєґ0-9]+/i).filter(x=>x.length>2).reduce((n,term)=>n+(names.includes(term)?1:0),0);
+   };
+   const ranked=candidates.map(schema=>({schema,score:score(schema)})).sort((a,b)=>b.score-a.score);
+   return ranked[0].score>0&&ranked[0].score>ranked[1].score?ranked[0].schema:null;
+  };
+  const selected=[choose('front'),choose('rear')].filter(Boolean);
+  const ambiguous=['front','rear'].filter(axle=>byAxle[axle].length>0&&!choose(axle));
+  if(!selected.length||ambiguous.length){
+   add('Каталог вернул несколько схем для одной и той же части автомобиля, но не дал однозначного соответствия. Случайные схемы не показываем — уточните узел или передайте запрос менеджеру.','bot','system');return;
   }
+  const component=String(query||'').split('|')[0].trim().replace(/^(передн\w*|задн\w*|front|rear)\s+/i,'');
+  const el=document.createElement('div');el.className='msg';
+  const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Подходящие схемы по передней и задней части';el.append(heading);
+  selected.forEach(schema=>{
+   const axle=schema.axle;
+   const id=groupOf(schema);
+   const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
+   const item=document.createElement('div');item.className='vehicle-row';
+   if(image){const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=(axle==='front'?'Передняя часть — ':'Задняя часть — ')+component;img.style.cssText='display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:7px;margin:6px 0';item.append(img)}
+   const label=document.createElement('div');label.style.fontWeight='700';label.textContent=(axle==='front'?'Передняя часть':'Задняя часть')+(component?' — '+component:'');item.append(label);
+   if(id){const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='width:100%;text-align:left;margin-top:7px';button.textContent='Открыть схему и выбрать позицию';button.onclick=()=>lookup('parts',query,id);item.append(button)}
+   el.append(item);
+  });
+  $('messages').append(el);scrollEnd();return;
  }
  if(schemas.length===1&&groupOf(schemas[0])){lookup('parts',query,groupOf(schemas[0]));return}
- const el=document.createElement('div');el.className='msg';
- const heading=document.createElement('div');heading.style.fontWeight='700';heading.textContent='Схемы TradeSoft по вашему запросу';el.append(heading);
- schemas.forEach((schema,index)=>{
-  const name=catalogValue(schema,['name','title','description','partName','part_name','text'])||('Схема '+(index+1));
-  const id=groupOf(schema);const image=catalogValue(schema,['img','image','imageUrl','image_url','url']);
-  const item=document.createElement('div');item.className='vehicle-row';
-  if(image){const img=document.createElement('img');img.src=String(image).startsWith('//')?'https:'+image:image;img.alt=name;img.style.cssText='display:block;width:100%;max-height:230px;object-fit:contain;background:#fff;border-radius:7px;margin:6px 0';item.append(img)}
-  const label=document.createElement('div');label.textContent=name;item.append(label);
-  if(id){const button=document.createElement('button');button.type='button';button.className='secondary';button.style.cssText='width:100%;text-align:left;margin-top:7px';button.textContent='Открыть схему и выбрать позицию';button.onclick=()=>lookup('parts',query,id);item.append(button)}
-  el.append(item)
- });
- $('messages').append(el);scrollEnd()
+ add('Каталог вернул несколько схем, но не указал, какая относится к передней, а какая к задней части автомобиля. Мы не будем показывать случайный список. Нужна проверка соответствия в каталоге.','bot','system');
 }
 
 async function lookup(mode,q,groupId){if(!vin||!vehicleConfirmed){add('Сначала подтвердите VIN и данные автомобиля. До подтверждения поиск запчастей не запускается.');return}if(!catalogVerified){add('Для этого VIN не подтверждён OEM-каталог. Поиск деталей остановлен, чтобы не выдать несовместимую запчасть.');return}setBusy(true);try{const catalogQuery=window.AIManagerLanguage?window.AIManagerLanguage.expandQuery(q):q;const request={mode,vin,q:catalogQuery,lang:currentRequestLang};if(groupId!==undefined&&groupId!==null)request.group_id=groupId;const d=await api('/api/catalog/v1/lookup',request);if(d?.status==='ambiguous'){trackEvent('parts_selection_incomplete',{mode,reason:'ambiguous_vehicle'});add('Каталог вернул несколько вариантов. Выбор запчастей остановлен до уточнения автомобиля.','bot','system')}else if(mode==='groups'){const result=d.result||{};renderCatalogGroups(result)}else if(mode==='diagrams'||mode==='diagram'){renderCatalogSchemas(d.result||d)}else if(mode==='parts'){if(d.result?.schemas)renderCatalogSchemas(d.result,pendingPartQuery||q);else renderCatalogParts(d.result||d);pendingPartQuery=''}else{const fields=collectFields(d.result||d);const el=document.createElement('div');el.className='msg';el.textContent=Object.entries(fields).map(([k,v])=>fieldLabel(k)+': '+v).join('\\n');$('messages').append(el);scrollEnd()}}catch(e){trackEvent('parts_lookup_failed',{mode,status:e.status||0});const detail=e.payload?.detail;const providerStatus=detail&&typeof detail==='object'?detail.status:null;add(providerStatus==='not_configured'?'TradeSoft не включён на сервере. Запрос не был отправлен в OEM-каталог.':providerStatus==='authorization_error'?'TradeSoft отклонил API-ключ. Проверьте доступ к Parts.Catalogs.':providerStatus==='access_denied'?'TradeSoft запретил доступ к каталогу или выбранному ресурсу.':providerStatus==='not_found'?'TradeSoft не нашёл данные для этого запроса.':providerStatus==='rate_limited'?'TradeSoft ограничил частоту запросов. Повторите позже.':'Не удалось выполнить запрос к TradeSoft. Проверьте журнал backend; результат не подменялся демонстрационными данными.','bot','system')}finally{setBusy(false);refreshOps()}}
