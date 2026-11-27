@@ -120,7 +120,7 @@ async def analytics_request_middleware(request, call_next):
     tenant_key = request.headers.get("X-Tenant-Key")
     if tenant_key:
         try:
-            request.state.tenant_id = await asyncio.to_thread(
+            getattr(request.state, "tenant_id", "default") = await asyncio.to_thread(
                 auth.resolve_public_tenant, tenant_key, request.headers.get("Origin")
             )
         except HTTPException as exc:
@@ -134,7 +134,7 @@ async def analytics_request_middleware(request, call_next):
         try:
             await asyncio.to_thread(
                 analytics.record_event, event_type,
-                tenant_id=request.state.tenant_id,
+                tenant_id=getattr(request.state, "tenant_id", "default"),
                 conversation_id=request.headers.get("X-Conversation-ID"),
                 route=path, method=request.method, status_code=response.status_code,
                 duration_ms=duration_ms, metadata={"provider": provider},
@@ -354,7 +354,7 @@ async def analytics_event(
     try:
         await asyncio.to_thread(
             analytics.record_event, payload.event_type,
-            tenant_id=request.state.tenant_id,
+            tenant_id=getattr(request.state, "tenant_id", "default"),
             conversation_id=conversation_id, metadata=payload.metadata,
         )
     except Exception as exc:
@@ -614,7 +614,7 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
         rows = await adapter.decode(vin, "vin", payload.lang)
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         if len(rows) != 1:
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
             return {
                 "vin": vin, "status": "ambiguous", "vehicle": None,
                 "vehicle_data_complete": False, "vehicle_missing_fields": ["vehicle_variant"],
@@ -623,9 +623,9 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
             }
         vehicle = _normalize_tradesoft_vehicle(rows[0])
         if vehicle.get("catalogId") is None or vehicle.get("carId") is None:
-            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+            await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 502, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
             raise HTTPException(status_code=502, detail="TradeSoft VIN response has no OEM catalogue identity.")
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         completeness = _vehicle_completeness(vehicle)
         trace("VIN decode", "tradesoft_parts_catalogs", "success", "TradeSoft OEM catalogue VIN lookup completed", {
             "catalog_verified": True,
@@ -644,7 +644,7 @@ async def decode_vehicle(payload: DecodeRequest, request: Request):
     except Exception as exc:
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/vehicles/decode", "vin_decode", status, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("VIN decode", "tradesoft_parts_catalogs", "error", str(exc)[:240])
         raise HTTPException(status_code=status, detail={
             "provider": "tradesoft_parts_catalogs",
@@ -669,7 +669,7 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
         result = await adapter.lookup(vin or "", payload.mode, payload.q, payload.lang, payload.group_id)
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status = "ambiguous" if isinstance(result, dict) and result.get("status") == "ambiguous" else "success"
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, 200, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("OEM catalogue lookup", "tradesoft_parts_catalogs", status, "TradeSoft OEM catalogue lookup completed", {
             "mode": payload.mode, "catalog_verified": True,
         })
@@ -691,7 +691,7 @@ async def catalogue_lookup(payload: LookupRequest, request: Request):
     except Exception as exc:
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status_code = getattr(exc, "status_code", None) or (503 if getattr(exc, "code", "") == "not_configured" else 502)
-        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"), request.state.tenant_id)
+        await _catalog_event("tradesoft_parts_catalogs", "/api/catalog/v1/lookup", payload.mode, status_code, elapsed, request.headers.get("X-Conversation-ID"), getattr(request.state, "tenant_id", "default"))
         trace("OEM catalogue lookup", "tradesoft_parts_catalogs", "error", str(exc)[:240], {"mode": payload.mode})
         raise HTTPException(status_code=status_code, detail={
             "provider": "tradesoft_parts_catalogs",
