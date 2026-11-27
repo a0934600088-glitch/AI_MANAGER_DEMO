@@ -53,8 +53,13 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             f"{provider.BASE_URL}/catalogs/11/groups2/": {
                 "items": [{"groupId": 33, "name": "Front suspension"}]
             },
+            f"{provider.BASE_URL}/catalogs/11/groups-suggest": [
+                {"sid": "87", "name": "Brake pads"},
+                {"sid": "88", "name": "Brake lining"}
+            ],
             f"{provider.BASE_URL}/catalogs/11/schemas": {
-                "data": [{"schemaId": 44, "name": "Front axle"}]
+                "group": {"id": 1, "name": "Brake system"},
+                "list": [{"groupId": 44, "name": "Front brake pads"}]
             },
             f"{provider.BASE_URL}/catalogs/11/parts2": {
                 "data": [{"oeNumber": "5Q0407183", "callout": "7"}]
@@ -110,6 +115,51 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             self.requests[-1]["params"],
             {"carId": 22, "criteria": "C1", "groupId": 33},
         )
+
+
+    async def test_part_name_search_uses_suggest_then_schemas_with_sid(self):
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600",
+                mode="parts",
+                query="Brake pads",
+                lang="en",
+            )
+
+        self.assertEqual(result["suggestions"], [
+            {"sid": "87", "name": "Brake pads"},
+            {"sid": "88", "name": "Brake lining"},
+        ])
+        self.assertEqual(result["schemas"]["list"][0]["groupId"], 44)
+        self.assertEqual(
+            [request["url"] for request in self.requests[1:]],
+            [
+                f"{provider.BASE_URL}/catalogs/11/groups-suggest",
+                f"{provider.BASE_URL}/catalogs/11/schemas",
+            ],
+        )
+        self.assertEqual(self.requests[1]["params"], {"q": "Brake pads"})
+        self.assertEqual(self.requests[2]["params"], {
+            "carId": 22,
+            "partName": "Brake pads",
+            "partNameIds": "87,88",
+        })
+
+    async def test_part_name_search_without_suggestions_falls_back_to_part_name(self):
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups-suggest"] = []
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600",
+                mode="parts",
+                query="Front shock absorbers",
+                lang="en",
+            )
+
+        self.assertEqual(result["suggestions"], [])
+        self.assertEqual(self.requests[-1]["params"], {
+            "carId": 22,
+            "partName": "Front shock absorbers",
+        })
 
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
