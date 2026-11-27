@@ -329,18 +329,18 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             result = await self.adapter.lookup(
                 "WVWZZZAUZJP594600", mode="parts", query="Brake pads", lang="en"
             )
-        rows = result["schemas"]["list"]
-        self.assertEqual([row.get("axle") for row in rows], ["front", "rear", None])
-        self.assertEqual(rows[0]["catalogPath"], ["Front axle", "Disc brakes"])
-        self.assertEqual(rows[1]["catalogPath"], ["Rear axle", "Disc brakes"])
+            rows = result["schemas"]["list"]
+            self.assertEqual([row.get("axle") for row in rows], ["front", "rear", None])
+            self.assertEqual(rows[0]["catalogPath"], ["Front axle", "Disc brakes"])
+            self.assertEqual(rows[1]["catalogPath"], ["Rear axle", "Disc brakes"])
 
-        # A second part search for the same VIN reuses the indexed hierarchy.
-        groups2_before = sum("/groups2/" in request["url"] for request in self.requests)
-        await self.adapter.lookup(
-            "WVWZZZAUZJP594600", mode="parts", query="Brake discs", lang="en"
-        )
-        groups2_after = sum("/groups2/" in request["url"] for request in self.requests)
-        self.assertEqual(groups2_after, groups2_before)
+            # A second part search for the same VIN reuses the indexed hierarchy.
+            groups2_before = sum("/groups2/" in request["url"] for request in self.requests)
+            await self.adapter.lookup(
+                "WVWZZZAUZJP594600", mode="parts", query="Brake discs", lang="en"
+            )
+            groups2_after = sum("/groups2/" in request["url"] for request in self.requests)
+            self.assertEqual(groups2_after, groups2_before)
 
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
