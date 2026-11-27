@@ -204,6 +204,10 @@ class TradesoftPartsCatalogsAdapter:
             image = image[7:]
         elif image.startswith("//"):
             image = image[2:]
+        # TradeSoft schemas may return a resized thumbnail URL (/r/300x430/),
+        # while groups2/parts2 return the same original diagram without that
+        # derivative prefix. Compare the underlying asset identity, not size.
+        image = re.sub(r"/r/\\d+x\\d+/", "/", image, count=1, flags=re.IGNORECASE)
         return image.rstrip("/")
 
     @classmethod
