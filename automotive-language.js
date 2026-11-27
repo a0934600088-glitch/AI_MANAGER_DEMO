@@ -34,7 +34,7 @@
     {id:'radiator',ru:['радиатор охлаждения','радиатор двигателя'],uk:['радіатор охолодження','радіатор двигуна'],en:['engine radiator','radiator']},
     {id:'cabin_filter',ru:['салонный фильтр','фильтр салона'],uk:['салонний фільтр','фільтр салону'],en:['cabin filter','pollen filter']},
     {id:'oem_number',ru:['оригинальный номер','номер оригинала','оэ номер','oe номер'],uk:['оригінальний номер','номер оригіналу','oe номер'],en:['oe number','oem number','genuine part number']}
-  ];
+  ,
     {id:'engine_piston',ru:['поршень двигателя','поршень мотора','поршень двс','поршень цилиндра','поршень','поршни двигателя','поршни','поршневая группа','поршень в сборе','поршня двигателя'],uk:['поршень двигуна','поршень мотора','поршень циліндра','поршень','поршні двигуна','поршні','поршнева група'],en:['engine piston','piston','piston assembly','cylinder piston','engine pistons']},
     {id:'piston_ring',ru:['поршневые кольца','кольца поршневые','кольца двигателя','кольца на поршень'],uk:['поршневі кільця','кільця поршневі','кільця двигуна'],en:['piston rings','engine piston rings','piston ring set']},
     {id:'connecting_rod',ru:['шатун двигателя','шатун','шатуны','шатунный механизм'],uk:['шатун двигуна','шатун','шатуни'],en:['connecting rod','con rod','engine connecting rod']},
@@ -63,7 +63,8 @@
     {id:'engine_belt',ru:['ремень двигателя','приводной ремень','ремень генератора','поликлиновый ремень'],uk:['ремінь двигуна','привідний ремінь','ремінь генератора'],en:['serpentine belt','drive belt','accessory belt','engine belt']},
     {id:'exhaust_manifold',ru:['выпускной коллектор','коллектор выпуска'],uk:['випускний колектор'],en:['exhaust manifold']},
     {id:'intake_manifold',ru:['впускной коллектор','коллектор впуска'],uk:['впускний колектор'],en:['intake manifold','inlet manifold']},
-    {id:'oxygen_sensor',ru:['лямбда зонд','датчик кислорода','кислородный датчик'],uk:['лямбда зонд','датчик кисню'],en:['oxygen sensor','lambda sensor','o2 sensor']},
+    {id:'oxygen_sensor',ru:['лямбда зонд','датчик кислорода','кислородный датчик'],uk:['лямбда зонд','датчик кисню'],en:['oxygen sensor','lambda sensor','o2 sensor']}
+  ];
   const norm=s=>String(s||'').toLocaleLowerCase().replace(/[ё]/g,'е').replace(/[’']/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   const index=[];
   rows.forEach(row=>['ru','uk','en'].forEach(lang=>(row[lang]||[]).forEach(alias=>index.push({id:row.id,lang,alias,norm:norm(alias)}))));
