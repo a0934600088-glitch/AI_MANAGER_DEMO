@@ -252,6 +252,8 @@ async def admin_create_tenant_user(tenant_id: int, payload: TenantUserCreateRequ
     auth.require_role(user, "super_admin", "shop_admin")
     if user["role"] == "shop_admin" and user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Нельзя управлять сотрудниками другого магазина")
+    if user["role"] == "shop_admin" and payload.role == "shop_admin":
+        raise HTTPException(status_code=403, detail="Администратор магазина не может создавать других администраторов магазина")
     created = await asyncio.to_thread(auth.create_user, tenant_id, payload.username, payload.display_name, payload.password, payload.role)
     return {"user": created}
 
