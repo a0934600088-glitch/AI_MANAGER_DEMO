@@ -34,13 +34,17 @@ jobs:
           node <<'NODE'
           const base = process.env.API_BASE;
           const vin = 'WVWZZZAUZJP594600';
-          const queries = ['тормозные колодки', 'тормозные диски', 'передние амортизаторы'];
+          const queries = [
+            {q:'тормозные колодки | колодки тормозные | тормозная колодка | brake pads | brake pad', match:'колод'},
+            {q:'тормозные диски | тормозной диск | диск тормозной | brake disc | brake rotor', match:'диск'},
+            {q:'передние амортизаторы | амортизатор | стойка амортизатора | shock absorber | damper | strut', match:'амортиз'}
+          ];
           async function post(body, label) {
             const response = await fetch(base + '/api/catalog/v1/lookup', {
               method: 'POST',
               headers: {'content-type': 'application/json'},
               body: JSON.stringify(body),
-              signal: AbortSignal.timeout(45000)
+              signal: AbortSignal.timeout(60000)
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(label + ': HTTP ' + response.status + ' ' + JSON.stringify(payload.detail || payload));
@@ -56,69 +60,37 @@ jobs:
             return [];
           }
           (async () => {
-            for (const query of queries) {
-              const result = await post({vin, mode:'parts', q:query, lang:'ru'}, query + ' schema search');
-              const schemas = rows(result.schemas);
-              if (!schemas.length) throw new Error(query + ': TradeSoft returned no original schemas');
-              const schema = schemas.find(item => item.groupId ?? item.group_id ?? item.groupID ?? item.group?.id ?? item.id) || schemas[0];
-              const envelopeGroup = result.schemas?.group || {};
-              const treeResult = await post({vin, mode:'groups', lang:'ru'}, query + ' root groups');
-              const rootGroups = rows(treeResult.groups);
-              const isShockQuery = /амортиз|shock|strut/.test(query.toLowerCase());
-              const targetRoot = rootGroups.find(group => {
-                const name = String(group.name || '').toLowerCase();
-                return isShockQuery ? /подвес|suspension|chassis/.test(name) : /тормоз|brake/.test(name);
-              });
-              if (!targetRoot) throw new Error(query + ': no matching top-level groups2 category');
-              const leaves = [];
-              async function walk(group, depth=0) {
-                if (depth > 8 || leaves.length > 500) return;
-                const id = group.groupId ?? group.group_id ?? group.id;
-                const hasParts = group.hasParts === true || group.hasParts === 1 || String(group.hasParts).toLowerCase() === 'true';
-                const hasSubgroups = group.hasSubgroups === true || group.hasSubgroups === 1 || String(group.hasSubgroups).toLowerCase() === 'true';
-                if (hasParts && id != null) leaves.push(group);
-                if (!hasSubgroups || id == null) return;
-                const childResult = await post({vin, mode:'groups', group_id:id, lang:'ru'}, query + ' nested groups');
-                for (const child of rows(childResult.groups)) await walk(child, depth+1);
+            for (const item of queries) {
+              const search = await post({vin, mode:'parts', q:item.q, lang:'ru'}, item.q + ' schema search');
+              const schemas = rows(search.schemas);
+              const schema = schemas.find(s =>
+                (Array.isArray(s.partNames) && s.partNames.some(p => String(p?.name || '').toLowerCase().includes(item.match))) ||
+                String(s.name || '').toLowerCase().includes(item.match)
+              );
+              if (!schema) throw new Error(item.q + ': no original TradeSoft schema matched the requested part name');
+              const schemaId = schema.groupId ?? schema.group_id ?? schema.groupID ?? schema.id;
+              if (schemaId == null) throw new Error(item.q + ': matching schema has no groupId');
+              const selected = await post({vin, mode:'parts', q:item.q, group_id:schemaId, lang:'ru'}, item.q + ' parts2');
+              const diagram = selected.parts || {};
+              const groups = rows(diagram.partGroups || diagram.part_groups);
+              const parts = Array.isArray(diagram.parts) ? diagram.parts : groups.flatMap(group => rows(group.parts));
+              const positions = rows(diagram.positions);
+              const normalizeImage = value => { const text=String(value||''); return (text.startsWith('//')?'https:'+text:text).replace(/^http:/,'https:').split('?')[0]; };
+              if (!diagram.img || !positions.length || !parts.length) {
+                throw new Error(item.q + ': no complete original TradeSoft diagram, positions and parts');
               }
-              await walk(targetRoot);
-              const normalizeImage = value => { const text = String(value || ''); return (text.startsWith('//') ? 'https:' + text : text).replace(/^http:/, 'https:'); };
-              const targetImage = normalizeImage(schema.img);
-              const matchingLeaves = leaves.filter(group => normalizeImage(group.img) === targetImage);
-              console.log('groups2 matched image=' + matchingLeaves.length + ' leaves=' +
-                JSON.stringify(leaves.slice(0,20).map(group => ({
-                  id:group.groupId ?? group.group_id ?? group.id,
-                  name:group.name,
-                  img:group.img
-                }))).slice(0,7000));
-              let payload = null, parts = [], positions = [], groupId = null;
-              for (const leaf of matchingLeaves) {
-                const id = leaf.groupId ?? leaf.group_id ?? leaf.id;
-                const partsResult = await post({vin, mode:'parts', group_id:id, lang:'ru'}, query + ' matched parts2');
-                const candidatePayload = partsResult.parts || partsResult;
-                const partGroups = rows(candidatePayload.partGroups || candidatePayload.part_groups);
-                const candidateParts = partGroups.flatMap(group => rows(group.parts));
-                const candidatePositions = rows(candidatePayload.positions);
-                if (candidatePayload.img && candidatePositions.length && candidateParts.length) {
-                  payload = candidatePayload; parts = candidateParts; positions = candidatePositions; groupId = id; break;
-                }
-              }
-              if (!payload) {
-                console.error('TradeSoft schema/group mapping: ' + JSON.stringify({
-                  query, schemaName:schema.name, schemaImage:schema.img,
-                  targetRoot:targetRoot.name, leafCount:leaves.length,
-                  imageMatches:matchingLeaves.length
-                }).slice(0,7000));
-                throw new Error(query + ': no matching groups2 leaf produced the original parts2 data');
+              if (schema.img && normalizeImage(schema.img) !== normalizeImage(diagram.img)) {
+                throw new Error(item.q + ': selected parts2 diagram does not match the chosen schema image');
               }
               const oeCount = parts.filter(part =>
                 ['number','oeNumber','oe_number','oemNumber','oem_number','partNumber','part_number']
                   .some(key => part[key] !== undefined && part[key] !== null && String(part[key]).trim())
               ).length;
-              if (!oeCount) throw new Error(query + ': no OE numbers returned for the selected diagram');
-              console.log('LIVE TradeSoft OK: ' + query + '; schemas=' + schemas.length +
-                '; groupId=' + groupId + '; parts=' + parts.length +
-                '; positions=' + positions.length + '; OE=' + oeCount);
+              if (!oeCount) throw new Error(item.q + ': no OE numbers returned for the selected diagram');
+              console.log('LIVE TradeSoft OK: ' + item.q.split('|')[0].trim() +
+                '; schemas=' + schemas.length + '; parts=' + parts.length +
+                '; positions=' + positions.length + '; OE=' + oeCount +
+                '; resolvedGroupId=' + selected.resolvedGroupId);
             }
           })().catch(error => { console.error(error.message); process.exit(1); });
           NODE
