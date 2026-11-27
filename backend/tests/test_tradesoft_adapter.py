@@ -295,6 +295,45 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             "5Q0698151",
         )
 
+    async def test_multi_schema_search_classifies_front_and_rear_from_vin_catalogue_path(self):
+        front_image = "//img.parts-catalogs.com/test/front-brake.png"
+        rear_image = "//img.parts-catalogs.com/test/rear-brake.png"
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups-suggest"] = []
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
+            "list": [
+                {"groupId": "schema-front", "img": front_image, "name": "Disc brake 3",
+                 "partNames": [{"name": "Brake pads"}]},
+                {"groupId": "schema-rear", "img": rear_image, "name": "Disc brake 2",
+                 "partNames": [{"name": "Brake pads"}]},
+                {"groupId": "schema-ambiguous", "img": "//img.parts-catalogs.com/test/other.png",
+                 "name": "Disc brake 4"},
+            ]
+        }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups2/"] = lambda params: (
+            {"items": [
+                {"groupId": "front-root", "name": "Front axle", "hasSubgroups": True},
+                {"groupId": "rear-root", "name": "Rear axle", "hasSubgroups": True},
+            ]}
+            if "groupId" not in params else
+            {"items": [
+                {"groupId": "front-leaf", "name": "Disc brakes", "img": front_image,
+                 "hasSubgroups": False}
+            ]}
+            if params["groupId"] == "front-root" else
+            {"items": [
+                {"groupId": "rear-leaf", "name": "Disc brakes", "img": rear_image,
+                 "hasSubgroups": False}
+            ]}
+        )
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600", mode="parts", query="Brake pads", lang="en"
+            )
+        rows = result["schemas"]["list"]
+        self.assertEqual([row.get("axle") for row in rows], ["front", "rear", None])
+        self.assertEqual(rows[0]["catalogPath"], ["Front axle", "Disc brakes"])
+        self.assertEqual(rows[1]["catalogPath"], ["Rear axle", "Disc brakes"])
+
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
             "data": [
