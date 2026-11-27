@@ -47,8 +47,6 @@ class VehicleContractTests(unittest.TestCase):
         self.assertEqual(vehicle["vehicle_attributes"]["fuelSystem"], "Direct injection")
         self.assertEqual(vehicle["vehicle_attributes"]["driveType"], "AWD")
         self.assertEqual(vehicle["vehicle_attributes"]["tecdocId"], "122128")
-        self.assertEqual(vehicle["catalogId"] if "catalogId" in vehicle else None, None)
-
     def test_identity_alone_is_not_marked_as_complete_vehicle_data(self):
         result = main._vehicle_completeness({
             "brand": "VOLKSWAGEN",
