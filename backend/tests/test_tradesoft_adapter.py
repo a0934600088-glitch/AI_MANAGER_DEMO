@@ -447,10 +447,6 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.requests), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_brake_schema_categories_separate_front_rear_drum_and_parking(self):
         classify = self.adapter._schema_brake_category
         self.assertEqual(
@@ -497,3 +493,7 @@ if __name__ == "__main__":
         schema = result["schemas"]["list"][0]
         self.assertEqual(schema["catalogCategory"], "front_brake")
         self.assertEqual(schema["catalogCategoryLabel"], "Передняя тормозная система")
+
+
+if __name__ == "__main__":
+    unittest.main()
