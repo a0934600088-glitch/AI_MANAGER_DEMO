@@ -247,6 +247,54 @@ class TradesoftAdapterTests(unittest.IsolatedAsyncioTestCase):
             {"carId": 22, "criteria": "C1", "groupId": "brake-leaf"},
         )
 
+    async def test_complete_parts2_payload_with_wrong_diagram_is_remapped_to_schema_image(self):
+        schema_image = "//img.parts-catalogs.com/test/brake.png"
+        wrong_image = "//img.parts-catalogs.com/test/other-brake.png"
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/schemas"] = {
+            "list": [{
+                "groupId": "opaque-schema-id",
+                "img": schema_image,
+                "name": "Front brake diagram",
+                "partNames": [{"id": "289", "name": "Brake pads"}],
+            }]
+        }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/groups2/"] = lambda params: (
+            {"items": [{"groupId": "brake-root", "name": "Brake system", "hasParts": False, "hasSubgroups": True}]}
+            if "groupId" not in params else
+            {"items": [{"groupId": "brake-leaf", "name": "Front brake pads", "hasParts": True,
+                        "hasSubgroups": False, "img": schema_image}]}
+        )
+        def parts_response(params):
+            if params.get("groupId") == "opaque-schema-id":
+                return {
+                    "img": wrong_image,
+                    "partGroups": [{"parts": [{"oeNumber": "WRONG-IMAGE"}]}],
+                    "positions": [{"number": "9", "x": 0.4, "y": 0.4}],
+                }
+            return {
+                "img": schema_image,
+                "partGroups": [{"parts": [{"oeNumber": "5Q0698151", "name": "Brake pad"}]}],
+                "positions": [{"number": "3", "x": 0.5, "y": 0.5}],
+            }
+        self.payloads[f"{provider.BASE_URL}/catalogs/11/parts2"] = parts_response
+
+        with patch.object(provider.httpx, "AsyncClient", side_effect=self._client_factory):
+            result = await self.adapter.lookup(
+                "WVWZZZAUZJP594600",
+                mode="parts",
+                query="тормозные колодки",
+                lang="ru",
+                group_id="opaque-schema-id",
+            )
+
+        self.assertEqual(result["resolvedGroupId"], "brake-leaf")
+        self.assertEqual(result["selectedSchema"]["img"], schema_image)
+        self.assertEqual(result["parts"]["img"], schema_image)
+        self.assertEqual(
+            result["parts"]["partGroups"][0]["parts"][0]["oeNumber"],
+            "5Q0698151",
+        )
+
     async def test_ambiguous_vehicle_is_not_used_for_catalogue_lookup(self):
         self.payloads[f"{provider.BASE_URL}/car/info"] = {
             "data": [

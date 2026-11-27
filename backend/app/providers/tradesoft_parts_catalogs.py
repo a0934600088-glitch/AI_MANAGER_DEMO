@@ -392,18 +392,27 @@ class TradesoftPartsCatalogsAdapter:
             parts = await self._get(f"/catalogs/{catalog_id}/parts2", params, lang)
             resolved_group_id = group_id
             selected_schema = None
-            if not self._parts_payload_complete(parts) and query and query.strip():
-                suggestions, schemas_payload, schema_rows = await self._search_schemas(
-                    catalog_id, car_id, query, lang
-                )
+            if query and query.strip():
+                _, _, schema_rows = await self._search_schemas(catalog_id, car_id, query, lang)
                 selected_schema = next(
                     (row for row in schema_rows if str(self._schema_group_id(row)) == str(group_id)),
                     None,
                 )
-                if selected_schema and selected_schema.get("img"):
+                if not selected_schema or not selected_schema.get("img"):
+                    raise TradesoftError(
+                        "schema_identity_missing",
+                        "TradeSoft did not return the selected schema image for this VIN and part query. The diagram was not accepted.",
+                    )
+                expected_image = self._image_key(selected_schema.get("img"))
+                direct_image_matches = (
+                    self._parts_payload_complete(parts)
+                    and self._image_key(parts.get("img")) == expected_image
+                )
+                if not direct_image_matches:
                     matching_groups = await self._groups_matching_schema_image(
                         catalog_id, base_params, selected_schema.get("img"), query, lang
                     )
+                    mapped = False
                     for group in matching_groups:
                         candidate_id = self._schema_group_id(group)
                         if candidate_id is None:
@@ -413,14 +422,23 @@ class TradesoftPartsCatalogsAdapter:
                         candidate_parts = await self._get(
                             f"/catalogs/{catalog_id}/parts2", candidate_params, lang
                         )
-                        if self._parts_payload_complete(candidate_parts):
+                        if (
+                            self._parts_payload_complete(candidate_parts)
+                            and self._image_key(candidate_parts.get("img")) == expected_image
+                        ):
                             parts = candidate_parts
                             resolved_group_id = candidate_id
+                            mapped = True
                             break
-            if not self._parts_payload_complete(parts):
+                    if not mapped:
+                        raise TradesoftError(
+                            "schema_group_mapping_failed",
+                            "TradeSoft returned a parts2 diagram that does not match the selected original schema image, and no matching VIN-specific group with positions and OE parts was found. The selection was stopped rather than guessing.",
+                        )
+            elif not self._parts_payload_complete(parts):
                 raise TradesoftError(
-                    "schema_group_mapping_failed",
-                    "TradeSoft returned the original schema image but no matching parts2 group with positions and OE parts. The selection was stopped rather than guessing.",
+                    "incomplete_parts_payload",
+                    "TradeSoft did not return a complete parts2 diagram with positions and OE parts for the selected VIN-specific group.",
                 )
             return {
                 "vehicle": car,
