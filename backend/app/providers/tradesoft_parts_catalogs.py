@@ -285,6 +285,52 @@ class TradesoftPartsCatalogsAdapter:
         return list(suggestions_by_id.values()), envelope, rows
 
     @staticmethod
+    def _schema_label(schema: dict[str, Any], paths: list[list[str]] | None = None) -> str:
+        """Collect only provider-authored labels used for conservative classification."""
+        names: list[str] = []
+        for key in ("name", "title", "description", "partName", "part_name", "text"):
+            value = schema.get(key)
+            if value not in (None, ""):
+                names.append(str(value))
+        for item in schema.get("partNames", []) if isinstance(schema.get("partNames"), list) else []:
+            if isinstance(item, dict):
+                value = item.get("name") or item.get("title")
+                if value:
+                    names.append(str(value))
+        for path in paths or []:
+            names.extend(str(part) for part in path if part)
+        return " ".join(names).lower()
+
+    @classmethod
+    def _schema_brake_category(
+        cls, schema: dict[str, Any], paths: list[list[str]] | None = None
+    ) -> tuple[str, str] | None:
+        """Classify a brake diagram only from explicit VIN-catalogue labels."""
+        label = cls._schema_label(schema, paths)
+        parking = bool(re.search(
+            r"parking[- ]?brake|hand[- ]?brake|handbrake|park brake|стояночн|ручник|"
+            r"parking brake shoe|brake shoe.{0,24}(?:parking|hand)",
+            label,
+        ))
+        if parking:
+            return ("parking_brake", "Колодки стояночного тормоза (ручника)")
+        drum = bool(re.search(r"\bdrum\b|барабан|барабанн|барабанні", label))
+        if drum:
+            return ("drum_brake", "Барабанная тормозная система")
+        is_brake = bool(re.search(
+            r"brak|disc|rotor|pad|lining|тормоз|колод|диск|гальм|накладк",
+            label,
+        ))
+        if not is_brake:
+            return None
+        axle = cls._schema_axle(schema, paths)
+        if axle == "front":
+            return ("front_brake", "Передняя тормозная система")
+        if axle == "rear":
+            return ("rear_brake", "Задняя тормозная система")
+        return None
+
+    @staticmethod
     def _schema_axle(schema: dict[str, Any], paths: list[list[str]] | None = None) -> str | None:
         """Return an axle only when the provider's own labels identify it."""
         names: list[str] = []
@@ -671,6 +717,11 @@ class TradesoftPartsCatalogsAdapter:
             schema_paths = await self._schema_catalog_paths(
                 catalog_id, base_params, schema_rows, lang
             )
+        brake_query = bool(re.search(
+            r"тормоз|колод|диск|гальм|brake|rotor|pad|lining|drum|handbrake|parking brake",
+            part_query,
+            re.IGNORECASE,
+        ))
         for schema in schema_rows:
             image_key = self._image_key(schema.get("img"))
             paths = schema_paths.get(image_key, [])
@@ -679,6 +730,10 @@ class TradesoftPartsCatalogsAdapter:
             axle = self._schema_axle(schema, paths)
             if axle:
                 schema["axle"] = axle
+            if brake_query:
+                brake_category = self._schema_brake_category(schema, paths)
+                if brake_category:
+                    schema["catalogCategory"], schema["catalogCategoryLabel"] = brake_category
         return {
             "vehicle": car,
             "catalogId": catalog_id,
