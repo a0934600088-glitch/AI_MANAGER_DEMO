@@ -129,6 +129,52 @@ class TradesoftPartsCatalogsAdapter:
                 item["frame"] = value
             candidates.append(item)
 
+        # CarInfo supplies the vehicle identity. TradeSoft documents Car2 as the
+        # detailed selected-vehicle record (including its parameter collection).
+        # Enrich only an unambiguous result; never guess which variant to expand.
+        if len(candidates) == 1:
+            vehicle = candidates[0]
+            catalog_id = vehicle.get("catalogId")
+            car_id = vehicle.get("carId")
+            if catalog_id is not None and car_id is not None:
+                detail_params: dict[str, Any] = {}
+                if vehicle.get("criteria") not in (None, ""):
+                    detail_params["criteria"] = vehicle["criteria"]
+                try:
+                    details = await self._get(
+                        f"/catalogs/{catalog_id}/cars2/{car_id}",
+                        detail_params,
+                        lang,
+                    )
+                    if isinstance(details, dict) and isinstance(details.get("data"), dict):
+                        details = details["data"]
+                    elif isinstance(details, dict) and isinstance(details.get("data"), list):
+                        detail_rows = [row for row in details["data"] if isinstance(row, dict)]
+                        details = detail_rows[0] if len(detail_rows) == 1 else details
+                    if isinstance(details, dict):
+                        for key, detail_value in details.items():
+                            if detail_value in (None, ""):
+                                continue
+                            if key == "parameters" and isinstance(detail_value, list):
+                                original = vehicle.get("parameters")
+                                if isinstance(original, list):
+                                    vehicle["parameters"] = original + detail_value
+                                else:
+                                    vehicle["parameters"] = detail_value
+                            elif key not in {"catalogId", "carId", "criteria"}:
+                                if vehicle.get(key) in (None, "", [], {}):
+                                    vehicle[key] = detail_value
+                                elif key not in vehicle:
+                                    vehicle[key] = detail_value
+                        vehicle["vehicle_details_status"] = "success"
+                    else:
+                        vehicle["vehicle_details_status"] = "empty"
+                except TradesoftError as exc:
+                    # The base VIN identity remains valid; detailed enrichment is
+                    # explicitly marked unavailable and does not fabricate fields.
+                    vehicle["vehicle_details_status"] = "unavailable"
+                    vehicle["vehicle_details_error"] = exc.code
+
         async with self._lock:
             self._cache[cache_key] = (time.monotonic() + 86400, candidates)
         return candidates
